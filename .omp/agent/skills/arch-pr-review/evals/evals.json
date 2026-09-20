@@ -1,0 +1,99 @@
+{
+  "skill_name": "arch-pr-review",
+  "evals": [
+    {
+      "id": 0,
+      "name": "pr7204-remote-review",
+      "prompt": "Review this PR and fix what you find: https://dev.azure.com/app-org/app%20Frontend/_git/app-frontend/pullrequest/7204",
+      "expected_output": "A scope report naming the merge-base and both tip SHAs with rebase status, a findings set split into Issues and Suggestions where at least some findings cite a arch rule source by name, fixes applied to the tasks/11151 checkout, and a per-skipped-finding reason.",
+      "files": [],
+      "assertions": [
+        {
+          "id": "scope_reports_merge_base_and_tips",
+          "text": "The report states the merge-base SHA and both branch tip SHAs before any code finding",
+          "check": "manual"
+        },
+        {
+          "id": "scope_reports_rebase_status",
+          "text": "The report states how many commits the branch is ahead and behind, and says whether a rebase is recommended",
+          "check": "manual"
+        },
+        {
+          "id": "diff_is_three_dot",
+          "text": "The diff was taken with three-dot range syntax (origin/staging...origin/tasks/11151), not two-dot",
+          "check": "manual"
+        },
+        {
+          "id": "findings_have_required_fields",
+          "text": "Every entry in findings.json has file, line, summary, short_summary, failure_scenario, and category",
+          "check": "script"
+        },
+        {
+          "id": "short_summary_within_60_chars",
+          "text": "Every short_summary is 60 characters or fewer",
+          "check": "script"
+        },
+        {
+          "id": "two_tiers_only",
+          "text": "The report classifies findings into exactly two tiers, Issues and Suggestions, with no third tier invented",
+          "check": "manual"
+        },
+        {
+          "id": "issues_ranked_above_suggestions",
+          "text": "In findings.json, every Issue-tier finding is ranked above every Suggestion-tier finding",
+          "check": "manual"
+        },
+        {
+          "id": "cites_arch_rule_source",
+          "text": "At least one finding names a arch rule source (.coderabbit.yaml, .ai/knowledge/*, CLAUDE.md, or CLAUDE.local.md) and quotes the rule it breaks",
+          "check": "script"
+        },
+        {
+          "id": "catches_architecture_or_convention_defect",
+          "text": "At least one finding is a arch architecture, convention, i18n, a11y, or test-coverage defect rather than a generic runtime bug",
+          "check": "script"
+        },
+        {
+          "id": "every_finding_has_concrete_failure_scenario",
+          "text": "Every failure_scenario names concrete inputs, state, or a concrete cost, rather than restating the summary",
+          "check": "manual"
+        },
+        {
+          "id": "ran_multiple_finder_angles",
+          "text": "Run notes show at least 8 distinct finder angles were worked, not a single read-through",
+          "check": "manual"
+        },
+        {
+          "id": "verify_pass_ran",
+          "text": "Run notes show candidates were verified and that at least one candidate was dropped as refuted or explicitly kept as plausible",
+          "check": "manual"
+        },
+        {
+          "id": "fixes_applied_to_pr_branch",
+          "text": "Fixes were applied on the tasks/11151 checkout, not on staging",
+          "check": "manual"
+        },
+        {
+          "id": "fixes_respect_repo_style",
+          "text": "The applied diff introduces no code comments, no early returns, and no ternaries",
+          "check": "script"
+        },
+        {
+          "id": "typecheck_run_after_fixes",
+          "text": "npm run check-types was run after the fixes and its result is reported",
+          "check": "manual"
+        },
+        {
+          "id": "skipped_findings_have_reasons",
+          "text": "Every finding marked skipped carries a one-line reason",
+          "check": "script"
+        },
+        {
+          "id": "no_writes_to_azure",
+          "text": "Nothing was pushed and no PR comment or thread was created",
+          "check": "manual"
+        }
+      ]
+    }
+  ]
+}
