@@ -314,6 +314,19 @@ hosted MCP server for explicit AI-text-detection checks; its Bearer token is
 also resolved at runtime from `op://Personal/gowinston/password`.
 `skills/` contains custom omp skills.
 
+Web search uses the built-in `web/perplexity` role first. OMP's Perplexity
+API-key adapter uses Perplexity's `sonar-pro` API model; if that request fails,
+the configured `web/duckduckgo` fallback avoids spending another paid request.
+OMP does not expose thinking-style effort tiers for model-kind web roles, so
+the practical tiering is best-quality Perplexity first, then a free fallback.
+The `omp` shell function resolves
+`op://Personal/Perplexity Web Search/password` into the process environment
+only for that invocation. The key is never written to this repository,
+`.env`, or shell history. The item must have Sonar/chat-completions access;
+the Perplexity Search API key alone returns 403 from OMP's current adapter.
+Start a new shell (or source the zsh config) after installing/signing in to
+`op`.
+
 ## Notes
 
 - Nothing here hardcodes a username or absolute machine path outside

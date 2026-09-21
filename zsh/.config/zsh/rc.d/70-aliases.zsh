@@ -11,9 +11,18 @@ ffc() {
 
 # Make sure OMP (and anything it spawns) runs under zsh even when $SHELL
 # defaults to something else (e.g. a display manager session or systemd
-# unit with $SHELL unset/bash). Resolves zsh's path dynamically instead of
+# unit with $SHELL unset/bash). Resolve zsh dynamically instead of
 # hardcoding /usr/bin/zsh or /bin/zsh, so this works on both platforms.
-command -v omp >/dev/null 2>&1 && alias omp="SHELL=\"\$(command -v zsh)\" command omp"
+# Perplexity's web-search key stays in 1Password and is loaded only when
+# the omp command is invoked; failed lookups leave OMP's normal fallbacks
+omp() {
+  if [[ -z "${PERPLEXITY_API_KEY:-}" ]] && command -v op >/dev/null 2>&1; then
+    local perplexity_key
+    perplexity_key="$(op read "op://Personal/Perplexity Web Search/password" --no-newline 2>/dev/null)" || perplexity_key=""
+    [[ -n "$perplexity_key" ]] && export PERPLEXITY_API_KEY="$perplexity_key"
+  fi
+  SHELL="$(command -v zsh)" command omp "$@"
+}
 
 # Linux-only power controls (systemd). No-op on macOS.
 command -v systemctl >/dev/null 2>&1 && alias shutdown='systemctl poweroff'
