@@ -1,3 +1,5 @@
+bindkey -e
+
 if [[ -o interactive && -o zle && $TERM != dumb ]] && command -v histago >/dev/null 2>&1 && command -v fzf >/dev/null 2>&1; then
   fzf-history-timeago() {
     local selected_cmd
@@ -8,5 +10,4 @@ if [[ -o interactive && -o zle && $TERM != dumb ]] && command -v histago >/dev/n
 
   zle -N fzf-history-timeago
   bindkey '^R' fzf-history-timeago
-  bindkey -e
 fi

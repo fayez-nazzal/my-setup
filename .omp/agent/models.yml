@@ -1,5 +1,5 @@
 providers:
-  anthropic:
+  anthropic-api:
     # Replace the placeholder with your 1Password secret reference.
     apiKey: "!op read op://Personal/OMP ANTHROPIC/credential --no-newline"
     api: anthropic-messages
@@ -57,3 +57,4 @@ providers:
           output: 5.00
           cacheRead: 0.10
           cacheWrite: 1.25
+  default: openai-codex/gpt-5.6-luna:medium

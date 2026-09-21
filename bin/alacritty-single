@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Enforce a single Alacritty window, backed by a persistent tmux session.
+# If an Alacritty window already exists, focus it instead of spawning a
+# second one. Otherwise launch Alacritty attached to (or creating) the
+# "main" tmux session, so new "terminals" are tmux windows/panes, not new
+# Alacritty processes. Closing the Alacritty window only detaches tmux;
+# the session and its history survive until the tmux server is killed.
+set -euo pipefail
+
+existing=$(i3-msg -t get_tree | jq -r '
+  .. | objects
+  | select(.window_properties?.class? == "Alacritty")
+  | .id' | head -n1)
+
+if [ -n "${existing:-}" ]; then
+  i3-msg "[con_id=$existing] focus" >/dev/null
+else
+  exec alacritty -e tmux new-session -A -s main
+fi

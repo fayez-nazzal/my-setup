@@ -1,0 +1,120 @@
+#!/bin/sh
+set -eu
+
+# Node names for this machine's USB headset — rename for your own hardware
+# (`pw-dump | jq -r '.[] | select(.type=="PipeWire:Interface:Node") | .info.props["node.name"]'`
+# lists everything PipeWire currently sees).
+SPEAKER='alsa_output.usb-ME6S_MS_N-B_R-UN__3db_ME6S-00.analog-stereo'
+MICROPHONE='alsa_input.usb-ME6S_MS_N-B_R-UN__3db_ME6S-00.mono-fallback'
+
+node_id() {
+    node_name=$1
+    id=$(pw-dump | jq -r --arg name "$node_name" \
+        'first(.[] | select(.type == "PipeWire:Interface:Node" and .info.props["node.name"] == $name) | .id) // empty')
+    if [ -z "$id" ]; then
+        echo "Audio device is unavailable: $node_name" >&2
+        exit 1
+    fi
+    printf '%s\n' "$id"
+}
+
+set_exact_volume() {
+    id=$1
+    value=${2:-}
+    maximum=$3
+    label=$4
+    value=${value%%%}
+    case "$value" in
+        ''|*[!0-9]*)
+            echo "Usage: $label VOLUME_PERCENT" >&2
+            exit 2
+            ;;
+    esac
+    if [ "$value" -gt "$maximum" ]; then
+        echo "$label accepts 0-${maximum}%." >&2
+        exit 2
+    fi
+    wpctl set-volume -l "$(awk "BEGIN { print $maximum / 100 }")" "$id" "${value}%"
+}
+
+show_result() {
+    label=$1
+    id=$2
+    printf '%s: ' "$label"
+    wpctl get-volume "$id"
+}
+
+show_help() {
+    cat <<'EOF'
+Noise cancellation:
+  ncon                 Enable RNNoise
+  ncoff                Disable and unload RNNoise
+  ncstatus             Show RNNoise status
+  noise-cancel on|off|status
+
+Headset speaker output:
+  speaker-up           Increase volume 5%
+  speaker-down         Decrease volume 5%
+  speaker-mute         Toggle mute
+  speaker-volume 70    Set exact volume (0-100%)
+
+Headset microphone input:
+  mic-up               Increase gain 5%
+  mic-down             Decrease gain 5%
+  mic-mute             Toggle mute
+  mic-volume 150       Set exact gain (0-200%)
+
+Help:
+  audio-help
+EOF
+}
+
+case "${1:-help}:${2:-}" in
+    speaker:up)
+        id=$(node_id "$SPEAKER")
+        wpctl set-volume -l 1.0 "$id" 5%+
+        show_result 'Speaker' "$id"
+        ;;
+    speaker:down)
+        id=$(node_id "$SPEAKER")
+        wpctl set-volume "$id" 5%-
+        show_result 'Speaker' "$id"
+        ;;
+    speaker:mute)
+        id=$(node_id "$SPEAKER")
+        wpctl set-mute "$id" toggle
+        show_result 'Speaker' "$id"
+        ;;
+    speaker:volume)
+        id=$(node_id "$SPEAKER")
+        set_exact_volume "$id" "${3:-}" 100 'speaker-volume'
+        show_result 'Speaker' "$id"
+        ;;
+    mic:up)
+        id=$(node_id "$MICROPHONE")
+        wpctl set-volume -l 2.0 "$id" 5%+
+        show_result 'Microphone' "$id"
+        ;;
+    mic:down)
+        id=$(node_id "$MICROPHONE")
+        wpctl set-volume "$id" 5%-
+        show_result 'Microphone' "$id"
+        ;;
+    mic:mute)
+        id=$(node_id "$MICROPHONE")
+        wpctl set-mute "$id" toggle
+        show_result 'Microphone' "$id"
+        ;;
+    mic:volume)
+        id=$(node_id "$MICROPHONE")
+        set_exact_volume "$id" "${3:-}" 200 'mic-volume'
+        show_result 'Microphone' "$id"
+        ;;
+    help:|help:help)
+        show_help
+        ;;
+    *)
+        show_help >&2
+        exit 2
+        ;;
+esac

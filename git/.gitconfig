@@ -1,0 +1,45 @@
+# Portable, machine-independent git defaults. No identity, signing key, or
+# credential helper lives here — those are personal/machine-specific and go
+# in ~/.gitconfig.local (untracked; see git/README.md).
+[include]
+	path = ~/.gitconfig.local
+
+[init]
+	defaultBranch = main
+
+[pull]
+	rebase = false
+
+[push]
+	autoSetupRemote = true
+	default = simple
+
+[fetch]
+	prune = true
+
+[rebase]
+	autoStash = true
+
+[diff]
+	colorMoved = default
+
+[merge]
+	conflictstyle = zdiff3
+
+[rerere]
+	enabled = true
+
+[help]
+	autocorrect = prompt
+
+[column]
+	ui = auto
+
+[branch]
+	sort = -committerdate
+
+[alias]
+	st = status -sb
+	co = checkout
+	br = branch
+	lg = log --graph --oneline --decorate
