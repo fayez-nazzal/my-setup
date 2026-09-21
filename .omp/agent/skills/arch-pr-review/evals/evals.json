@@ -3,9 +3,9 @@
   "evals": [
     {
       "id": 0,
-      "name": "pr7204-remote-review",
-      "prompt": "Review this PR and fix what you find: https://dev.azure.com/app-org/app%20Frontend/_git/app-frontend/pullrequest/7204",
-      "expected_output": "A scope report naming the merge-base and both tip SHAs with rebase status, a findings set split into Issues and Suggestions where at least some findings cite a arch rule source by name, fixes applied to the tasks/11151 checkout, and a per-skipped-finding reason.",
+      "name": "remote-review",
+      "prompt": "Review this PR and fix what you find: https://dev.azure.com/<org>/<project>/_git/<repo>/pullrequest/<id>",
+      "expected_output": "A scope report naming the merge-base and both tip SHAs with rebase status, a findings set split into Issues and Suggestions where at least some findings cite an architecture rule source by name, fixes applied to the source-branch checkout, and a per-skipped-finding reason.",
       "files": [],
       "assertions": [
         {
@@ -20,7 +20,7 @@
         },
         {
           "id": "diff_is_three_dot",
-          "text": "The diff was taken with three-dot range syntax (origin/staging...origin/tasks/11151), not two-dot",
+          "text": "The diff was taken with three-dot range syntax (origin/<targetBranch>...origin/<sourceBranch>), not two-dot",
           "check": "manual"
         },
         {
@@ -45,12 +45,12 @@
         },
         {
           "id": "cites_arch_rule_source",
-          "text": "At least one finding names a arch rule source (.coderabbit.yaml, .ai/knowledge/*, CLAUDE.md, or CLAUDE.local.md) and quotes the rule it breaks",
+          "text": "At least one finding names an architecture rule source (.coderabbit.yaml, .ai/knowledge/*, CLAUDE.md, or CLAUDE.local.md) and quotes the rule it breaks",
           "check": "script"
         },
         {
           "id": "catches_architecture_or_convention_defect",
-          "text": "At least one finding is a arch architecture, convention, i18n, a11y, or test-coverage defect rather than a generic runtime bug",
+          "text": "At least one finding is an architecture, convention, i18n, a11y, or test-coverage defect rather than a generic runtime bug",
           "check": "script"
         },
         {
@@ -70,7 +70,7 @@
         },
         {
           "id": "fixes_applied_to_pr_branch",
-          "text": "Fixes were applied on the tasks/11151 checkout, not on staging",
+          "text": "Fixes were applied on the source-branch checkout, not on the target branch",
           "check": "manual"
         },
         {

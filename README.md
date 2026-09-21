@@ -52,7 +52,7 @@ optional and checked with `command -v` before use.
 └── .omp/agent/
     ├── config.yml       Oh My Pi UI/theme/model-role settings
     ├── models.yml       Custom model provider definitions (reads secrets via 1Password CLI)
-    ├── mcp.json         Winston AI MCP server (reads its key via 1Password CLI)
+    ├── mcp.json         MCP server config (currently empty; see bin/humanize/)
     ├── extensions/      Native OMP extensions
     └── skills/          Custom omp skills
 ```
@@ -96,7 +96,7 @@ Clone the repo, then either run the bootstrap script or symlink the
 pieces you want by hand.
 
 ```sh
-git clone git@github.com:REDACTED-REDACTED/my-setup.git "$HOME/my-setup"
+git clone git@github.com:<your-username>/my-setup.git "$HOME/my-setup"
 "$HOME/my-setup/install.sh"
 ```
 
@@ -160,7 +160,7 @@ Notes below.
 
 Recommended tools for the full experience: `starship`, `thefuck`, `fzf`,
 `fd`, `bat`, `eza`, `zoxide`, `zsh-abbr`, [`histago`](https://github.com),
-[`tmuxscope`](https://github.com/REDACTED-REDACTED/tmuxscope), `wt`, `nag`,
+[`tmuxscope`](https://github.com/<your-username>/tmuxscope), `wt`, `nag`,
 Volta, pnpm. On Debian, most of these are `sudo apt install <name>` (`fd`
 is `fd-find`, `bat` may install as `batcat` — Debian's package renames it
 to avoid a clash with an unrelated `bat` package, and installing it that
@@ -312,9 +312,10 @@ that's the case.
 custom model providers; API keys are resolved at runtime through the
 [1Password CLI](https://developer.1password.com/docs/cli/) (`op read
 op://...`), so no secret is stored in this repo — install and sign in to
-`op` for those providers to work. `mcp.json` connects OMP to Winston AI's
-hosted MCP server for explicit AI-text-detection checks; its Bearer token is
-also resolved at runtime from `op://Personal/gowinston/password`.
+`op` for those providers to work. `mcp.json` declares OMP's MCP servers and
+is currently empty (kept symlinked for future use, see `bin/humanize/` for
+this repo's actual Winston AI AI-detection integration, a standalone CLI
+rather than an MCP server).
 `extensions/` contains the native Perplexity Search API web-search override;
 `skills/` contains custom omp skills.
 Web search uses the native Perplexity Search API override rather than the

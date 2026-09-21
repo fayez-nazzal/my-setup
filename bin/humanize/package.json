@@ -1,0 +1,10 @@
+{
+  "name": "humanize",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Provider-agnostic AI-content-detection + personal-style CLI. No external dependencies — Bun's built-in fetch covers HTTP.",
+  "type": "module",
+  "bin": {
+    "humanize": "./cli.ts"
+  }
+}

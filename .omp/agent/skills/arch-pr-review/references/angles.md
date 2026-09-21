@@ -4,7 +4,7 @@ Read the preamble, then read only the section for the angle you were assigned. T
 
 ## Preamble (every angle)
 
-You are one of eleven finder agents reviewing a app arch diff. Surface up to **8 candidates**. Each candidate is:
+You are one of eleven finder agents reviewing a frontend diff. Surface up to **8 candidates**. Each candidate is:
 
 - `file` — repo-relative path
 - `line` — 1-indexed line in the new file
@@ -37,33 +37,33 @@ Watch for a removed guard, a dropped error path, a validation that narrowed, a `
 
 For each function, command, query, or component the diff changes, Grep for its callers and check whether the change breaks a call site: a new precondition, a changed return shape, a new thrown error, a new ordering dependency.
 
-In this repo the call graph runs through the barrels and through state. Check that a changed uikit component is still used correctly by every app importing it through the barrel, that a changed `createQuery` shape matches every `useSubscribe` reading it, and that a changed `createCommand` payload matches every `app.onCommand` handler and every dispatch site.
+In this repo the call graph runs through the barrels and through the state layer. Check that a changed uikit component is still used correctly by every app importing it through the barrel, that a changed `createQuery` shape matches every `useSubscribe` reading it, and that a changed `createCommand` payload matches every `app.onCommand` handler and every dispatch site.
 
 ## Angle D — language-pitfall specialist
 
-Scan for the classic TypeScript, React, and browser pitfalls the diff introduces: falsy-zero, `==` coercion, a loop variable captured in a closure, array mutation of props or state, `Object.keys` order assumptions, a floating promise, `JSON.parse` on an unvalidated response, an unanchored regex, timezone and DST drift in dayjs usage, and `as any` or a non-null `!` hiding a real absence.
+Scan for the classic TypeScript, React, and browser pitfalls the diff introduces: falsy-zero, `==` coercion, a loop variable captured in a closure, array mutation of props or state, `Object.keys` order assumptions, a floating promise, `JSON.parse` on an unvalidated response, an unanchored regex, timezone and DST drift in date-library usage, and `as any` or a non-null `!` hiding a real absence.
 
 React-specific: a `useEffect` with a missing or wrong dependency, an effect that writes state it also reads, a key derived from array index over a reorderable list, and state derived from props that goes stale.
 
 ## Angle E — reactive state and data flow
 
-The state layer here is state CQRS, and its failures are quiet ones. Check the diff against the chain: command → PubSub → store → Zustand selector → `useSubscribe` → render.
+The state layer here is CQRS-based, and its failures are quiet ones. Check the diff against the chain: command → PubSub → store → selector → `useSubscribe` → render.
 
-Look for bidirectional sync between state state and another state manager (a form library especially) — the state ownership rule says each slice has one owner, and a sync loop shows up as a re-render storm or a cursor jump in an input, not as an exception. Look for an object or array rebuilt every render and fed into a subscription, defeating the `isEqual` gate. Look for a command dispatched during render rather than on an explicit external event.
+Look for bidirectional sync between the CQRS state store and another state manager (a form library especially) — the state ownership rule says each slice has one owner, and a sync loop shows up as a re-render storm or a cursor jump in an input, not as an exception. Look for an object or array rebuilt every render and fed into a subscription, defeating the `isEqual` gate. Look for a command dispatched during render rather than on an explicit external event.
 
-For `@state/http`: the query state is the single source of truth. Flag a hand-rolled loading or error flag beside a query that already carries one, a `.fetch*()` called from a component, a request body built in the component instead of `model.ts`, and an optimistic update that does not snapshot and roll back on error.
+For the data-fetching layer: the query state is the single source of truth. Flag a hand-rolled loading or error flag beside a query that already carries one, a `.fetch*()` called from a component, a request body built in the component instead of `model.ts`, and an optimistic update that does not snapshot and roll back on error.
 
 ---
 
 ## Angle F — architecture and CQRS layering
 
-Read `.ai/knowledge/review-rules.md`, `.ai/knowledge/cqrs-patterns.md`, and `.ai/knowledge/framework-boundaries.md`, then check every changed file against the layer it lives in.
+Read this repo's architecture and convention rule docs (wherever it keeps them — e.g. `.ai/knowledge/review-rules.md`, `.ai/knowledge/cqrs-patterns.md`, `.ai/knowledge/framework-boundaries.md`), then check every changed file against the layer it lives in.
 
 - `**/*repo.ts` — every `createQuery` and `createCommand` has a `description`; queries named `get*`/`is*`/`has*`/`should*`; commands named with action verbs; no side effects at all (no axios, fetch, toast, dialog, navigate).
 - `**/service.ts` and `**/service.tsx` — side effects belong here, registered through `app.onCommand()`; handlers hold business logic only, with pure work pushed to `utils.ts` and data shaping to `model.ts`.
 - `**/utils/**` and `**/helpers/**` — every function pure: deterministic, no I/O, no global state, no time-based values, no parameter mutation.
 - `**/api/**` — thin wrappers only, no business logic and no data transformation.
-- `libs/state/**` — never imports from `@app/*`, and carries no business vocabulary. Business terms in state are an architecture violation even when the code works.
+- the shared state library's own source — never imports app-specific modules, and carries no business vocabulary. Business terms in the state layer are an architecture violation even when the code works.
 - Components — presentational only. No data fetching, no state management, no `useMemo`/`useCallback` wrapping computation, no `useEffect` body holding conditions. An unavoidable effect holds a single command dispatch and nothing else.
 - No component defined inside another component, and no large JSX block assembled into a local variable. Each visual piece is its own file composed through the barrel.
 
@@ -77,17 +77,17 @@ Common ones here: a relative import where an alias belongs; a magic string, numb
 
 ## Angle H — accessibility and i18n
 
-Read `.ai/knowledge/accessibility.md` and the `**/*.tsx` path instructions in `.coderabbit.yaml`.
+Read this repo's accessibility rule doc and the `**/*.tsx` path instructions in `.coderabbit.yaml`.
 
 Accessibility: an interactive element with no accessible name, a click handler on a non-interactive element with no keyboard path, state conveyed by colour alone, a missing or wrong `aria-expanded`/`aria-pressed`/`aria-current`, a focus trap or lost focus after a dialog closes, an icon-only button with no label, a heading level that skips, a table built from divs where a real table element belongs, and a focus ring that does not come from `getFocusVisibleClasses()`.
 
-i18n: any user-facing string not going through `t('key')`, a key missing from `libs/app/src/assets/locales/en/common.json`, a key not in dot notation, `useTranslation()` used in a service, or `getI18n()` used in a component.
+i18n: any user-facing string not going through `t('key')`, a key missing from the app's `locales/en/common.json`, a key not in dot notation, `useTranslation()` used in a service, or `getI18n()` used in a component.
 
-Conditional rendering: prefer `RenderIf` or `Switch` over `&&` and ternaries in JSX, except inside a `@state.motion` animation.
+Conditional rendering: prefer `RenderIf` or `Switch` over `&&` and ternaries in JSX, except inside the shared UI kit's motion/animation wrapper.
 
 ## Angle I — test coverage
 
-Read `.ai/knowledge/testing.md`.
+Read this repo's testing rule doc.
 
 Every pure utility the diff adds or changes needs a spec, and the spec mirrors the source one to one. New specs go under the module root `tests/`: a `utils/` directory maps to `tests/utils/<name>.spec.ts`, a single `utils.ts` maps to `tests/utils.spec.ts`.
 
@@ -101,7 +101,7 @@ Also flag `.test.ts` where `.spec.ts` belongs, `it.skip` or `describe.skip`, a t
 
 Three related cleanup hunts over the changed code.
 
-**Reuse.** Flag new code that re-implements something the codebase already has. Grep the barrels and the files adjacent to the change, and name the existing helper to call instead. `@state/utils` already carries lodash, `@state/date` carries dayjs, `@state/paint/cn` carries class-name merging — a hand-rolled equivalent of any of those is a finding. Also flag a new component that duplicates an existing composable already exported from the uikit barrel.
+**Reuse.** Flag new code that re-implements something the codebase already has. Grep the barrels and the files adjacent to the change, and name the existing helper to call instead. The shared utility package already carries a lodash-equivalent, the shared date package carries a dayjs-equivalent, the shared UI package carries a class-name-merge helper — a hand-rolled equivalent of any of those is a finding. Also flag a new component that duplicates an existing composable already exported from the uikit barrel.
 
 **Simplification.** Flag unnecessary complexity the diff adds: redundant or derivable state, copy-paste with slight variation, deep nesting, and dead code left behind. Name the simpler form that does the same job.
 
@@ -111,6 +111,6 @@ Three related cleanup hunts over the changed code.
 
 Check that each change sits at the right depth rather than being a bandaid.
 
-A special case layered onto shared infrastructure is the signal: a component-specific branch inside a uikit composable, a one-review-type condition inside a generic state handler, an `if` on a specific id or route inside a shared utility. Prefer generalising the underlying mechanism over adding the special case, and say which mechanism you would generalise.
+A special case layered onto shared infrastructure is the signal: a component-specific branch inside a uikit composable, a one-review-type condition inside a generic state-layer handler, an `if` on a specific id or route inside a shared utility. Prefer generalising the underlying mechanism over adding the special case, and say which mechanism you would generalise.
 
 Also flag a fix applied at the render layer that belongs in the model or the service, and a workaround compensating for a bug that is still present upstream in the same diff.

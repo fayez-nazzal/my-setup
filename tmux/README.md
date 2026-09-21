@@ -30,8 +30,9 @@ Back up an existing `~/.tmux.conf` before creating the link.
   configuration starts without TPM or plugin directories, so first
   installation is safe; `Ctrl-a U` updates plugins later.
 
-- **tmuxscope, built from its upstream repository:**
-  [https://github.com/REDACTED-REDACTED/tmuxscope](https://github.com/REDACTED-REDACTED/tmuxscope)
+- **tmuxscope, built from its upstream repository (this repo's author's own
+  separate tool):**
+  [https://github.com/<your-username>/tmuxscope](https://github.com/<your-username>/tmuxscope)
 
   There's no published package — clone and build it with Bun. The default
   `tmux/tmux-scopes.conf` ships with a single `repos = ~/repos` scope, which
@@ -40,7 +41,7 @@ Back up an existing `~/.tmux.conf` before creating the link.
 
   ```sh
   mkdir -p "$HOME/repos/tools"
-  git clone https://github.com/REDACTED-REDACTED/tmuxscope.git "$HOME/repos/tools/tmuxscope"
+  git clone https://github.com/<your-username>/tmuxscope.git "$HOME/repos/tools/tmuxscope"
   cd "$HOME/repos/tools/tmuxscope"
   bun install
   bun run build
