@@ -52,6 +52,7 @@ optional and checked with `command -v` before use.
 └── .omp/agent/
     ├── config.yml       Oh My Pi UI/theme/model-role settings
     ├── models.yml       Custom model provider definitions (reads secrets via 1Password CLI)
+    ├── mcp.json         Winston AI MCP server (reads its key via 1Password CLI)
     └── skills/          Custom omp skills
 ```
 
@@ -285,30 +286,33 @@ Select "i3" as the session in your display manager's login screen
 once — it holds `agent.db`/`history.db`/`models.db`, `sessions/`, `blobs/`,
 `cache/`, and `terminal-sessions/` alongside the config. Never symlink the
 whole directory (`ln -sfn .../agent ~/.omp/agent`) — that replaces all of
-it, including your session history and caches, with just this repo's three
-tracked files. Symlink `config.yml`, `models.yml`, and `skills/`
+it, including your session history and caches, with just this repo's tracked
+files. Symlink `config.yml`, `models.yml`, `mcp.json`, and `skills/`
 individually instead, leaving everything else in place:
 
 ```sh
 mkdir -p "$HOME/.omp/agent"
 ln -sfn "$HOME/my-setup/.omp/agent/config.yml" "$HOME/.omp/agent/config.yml"
 ln -sfn "$HOME/my-setup/.omp/agent/models.yml" "$HOME/.omp/agent/models.yml"
+ln -sfn "$HOME/my-setup/.omp/agent/mcp.json"   "$HOME/.omp/agent/mcp.json"
 ln -sfn "$HOME/my-setup/.omp/agent/skills"     "$HOME/.omp/agent/skills"
 ```
 
-If `~/.omp/agent/config.yml` (or `models.yml`/`skills/`) already exists as
-a real file/directory, back it up first (`cp -a` it somewhere) before the
-`ln -sfn` — `ln -sfn` on an existing real file replaces it outright, and on
-an existing real *directory* it symlinks **into** it instead of replacing
-it, which silently produces a stray nested symlink rather than the
-intended swap. Remove the real directory first if that's the case.
+If `~/.omp/agent/config.yml` (or `models.yml`/`mcp.json`/`skills/`) already
+exists as a real file/directory, back it up first (`cp -a` it somewhere)
+before the `ln -sfn` — `ln -sfn` on an existing real file replaces it
+outright, and on an existing real *directory* it symlinks **into** it instead
+of replacing it, which silently produces a stray nested symlink rather than
+the intended swap. Remove the real directory first if that's the case.
 
 `config.yml` holds UI/theme/model-role preferences. `models.yml` declares
 custom model providers; API keys are resolved at runtime through the
 [1Password CLI](https://developer.1password.com/docs/cli/) (`op read
 op://...`), so no secret is stored in this repo — install and sign in to
-`op` for those providers to work. `skills/` contains custom omp skills
-available across sessions.
+`op` for those providers to work. `mcp.json` connects OMP to Winston AI's
+hosted MCP server for explicit AI-text-detection checks; its Bearer token is
+also resolved at runtime from `op://Personal/gowinston/password`.
+`skills/` contains custom omp skills.
 
 ## Notes
 

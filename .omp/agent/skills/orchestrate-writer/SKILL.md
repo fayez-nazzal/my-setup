@@ -52,7 +52,8 @@ Keep security decisions, destructive or irreversible operations, external side e
 5. **Adjudicate the result.** Treat the response as a draft or proposal. Re-check every path, symbol, assumption, claim, and command against the repository. Resolve ambiguity from source, not intuition.
 6. **Act locally.** Apply the smallest correct change in the primary session. Never paste a proposed commit, push, or success claim without executing it.
 7. **Validate independently.** Run the narrow reproduction or acceptance command in the primary session, then the repository-required checks. The `writer` response is never validation evidence.
-8. **Report precisely.** State what `writer` contributed, what the primary agent changed, exact commands run, and their observed outcomes.
+8. **Run Winston AI detection.** Unless the user opts out, send the final prose candidate to the Winston MCP tool `ai-text-detection` through the configured `winston-ai` server. Winston requires at least 300 characters; skip shorter text and say why. Treat the Human Score, sentence scores, attack flags, readability, and model version as advisory evidence, never as proof of authorship and never as a reason to rewrite solely to evade detection. If the service or credentials fail, report the failure and do not claim a successful check.
+9. **Report precisely.** State what `writer` contributed, what the primary agent changed, the Winston result or explicit skip/failure reason, exact commands run, and their observed outcomes.
 
 ## Packet quality
 
