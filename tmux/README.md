@@ -33,8 +33,10 @@ Back up an existing `~/.tmux.conf` before creating the link.
 - **tmuxscope, built from its upstream repository:**
   [https://github.com/REDACTED-REDACTED/tmuxscope](https://github.com/REDACTED-REDACTED/tmuxscope)
 
-  There's no published package — clone and build it with Bun, matching this
-  repo's own `tools = ~/repos/tools` scope in `tmux/tmux-scopes.conf`:
+  There's no published package — clone and build it with Bun. The default
+  `tmux/tmux-scopes.conf` ships with a single `repos = ~/repos` scope, which
+  already covers `~/repos/tools/tmuxscope` as a subdirectory, so no extra
+  scope entry is needed just to build it here:
 
   ```sh
   mkdir -p "$HOME/repos/tools"
@@ -51,6 +53,15 @@ Back up an existing `~/.tmux.conf` before creating the link.
   no separate install step needed. Verify with `tmuxscope --version`
   (tested against 0.2.2, matching `package.json` at clone time). Requires
   tmux ≥ 3.0, zsh, and Bun ≥ 1.2 (all satisfied by this repo's zsh setup).
+
+  **Linux note:** the `0.2.2` release breaks routing on tmux builds that
+  vis-escape control bytes in formatted command output (observed on
+  Debian's packaged tmux 3.5a; not on Homebrew's tmux on macOS). The
+  symptom is every `cd` failing with `tmuxscope route: tmux list-panes …
+  failed: can't find window` and a literal `\037` inside the printed tmux
+  target. This is fixed upstream past `0.2.2` (the `FIELD` separator moved
+  off the byte tmux rewrites) — after cloning, check out `main` rather than
+  the `0.2.2` tag, or apply that fix on top, before `bun run build`.
 
   The scope definitions are tracked in `tmux/tmux-scopes.conf`; install
   them with:
