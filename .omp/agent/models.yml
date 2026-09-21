@@ -1,7 +1,7 @@
 providers:
   anthropic-api:
     # Replace the placeholder with your 1Password secret reference.
-    apiKey: "!op read op://Personal/OMP ANTHROPIC/credential --no-newline"
+    apiKey: "!op read \"op://Personal/OMP ANTHROPIC/password\" --no-newline"
     api: anthropic-messages
     baseUrl: https://api.anthropic.com
     models:
@@ -57,3 +57,61 @@ providers:
           output: 5.00
           cacheRead: 0.10
           cacheWrite: 1.25
+  openai-api:
+    # Replace the placeholder with your 1Password secret reference.
+    apiKey: "!op read \"op://Personal/OMP OPENAI/password\" --no-newline"
+    api: openai-responses
+    baseUrl: https://api.openai.com/v1
+    models:
+      - id: gpt-6-astra
+        name: "GPT-6 Astra (API)"
+        reasoning: true
+        input:
+          - text
+          - image
+        contextWindow: 272000
+        maxTokens: 128000
+        cost:
+          input: 10.00
+          output: 50.00
+          cacheRead: 1.00
+          cacheWrite: 0
+      - id: gpt-5.6-sol
+        name: "GPT-5.6 Sol"
+        reasoning: true
+        input:
+          - text
+          - image
+        contextWindow: 272000
+        maxTokens: 128000
+        cost:
+          input: 4.00
+          output: 20.00
+          cacheRead: 0.40
+          cacheWrite: 5.00
+      - id: gpt-5.6-terra
+        name: "GPT-5.6 Terra"
+        reasoning: true
+        input:
+          - text
+          - image
+        contextWindow: 272000
+        maxTokens: 128000
+        cost:
+          input: 2.00
+          output: 12.00
+          cacheRead: 0.20
+          cacheWrite: 2.50
+      - id: gpt-5.6-luna
+        name: "GPT-5.6 Luna"
+        reasoning: true
+        input:
+          - text
+          - image
+        contextWindow: 272000
+        maxTokens: 128000
+        cost:
+          input: 0.20
+          output: 1.20
+          cacheRead: 0.02
+          cacheWrite: 0.25
