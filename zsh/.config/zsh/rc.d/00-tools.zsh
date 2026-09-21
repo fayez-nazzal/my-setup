@@ -20,11 +20,18 @@ fi
 
 [[ -r "$HOME/fzf-git.sh/fzf-git.sh" ]] && source "$HOME/fzf-git.sh/fzf-git.sh"
 
+[[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
+
 command -v bat >/dev/null 2>&1 && alias cat='bat'
 command -v eza >/dev/null 2>&1 && alias ls='eza --color=always --long --git --no-filesize --icons=always --no-user --no-permissions'
 
+# zsh-abbr: Homebrew formula on macOS, or a manual clone on Linux (no
+# Homebrew required — see README for the `git clone` command).
 if command -v brew >/dev/null 2>&1; then
   brew_prefix=$(brew --prefix)
   [[ -r "$brew_prefix/share/zsh-abbr/zsh-abbr.zsh" ]] && source "$brew_prefix/share/zsh-abbr/zsh-abbr.zsh"
   [[ -d "$brew_prefix/share/zsh-abbr" ]] && FPATH="$brew_prefix/share/zsh-abbr:$FPATH"
+elif [[ -r "$HOME/.config/zsh-abbr/zsh-abbr.zsh" ]]; then
+  source "$HOME/.config/zsh-abbr/zsh-abbr.zsh"
+  FPATH="$HOME/.config/zsh-abbr:$FPATH"
 fi

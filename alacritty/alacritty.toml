@@ -1,0 +1,36 @@
+[terminal.shell]
+program = "/usr/bin/zsh"
+args = ["-l"]
+
+[font]
+size = 11.0
+
+[font.normal]
+family = "GeistMono Nerd Font Mono"
+style = "Regular"
+
+[font.bold]
+family = "GeistMono Nerd Font Mono"
+style = "Bold"
+
+[font.italic]
+family = "GeistMono Nerd Font Mono"
+style = "Italic"
+
+# keyd's [command:C] layer (see ../keyd/) emits these application-neutral
+# editing chords for Command+C/P/V, since terminals can't tell a raw Ctrl+C
+# (SIGINT) from a Cmd+C-turned-Ctrl+C without a distinct keysym.
+[[keyboard.bindings]]
+key = "Insert"
+mods = "Control"
+action = "Copy"
+
+[[keyboard.bindings]]
+key = "Insert"
+mods = "Shift"
+action = "Paste"
+
+[[keyboard.bindings]]
+key = "Return"
+mods = "Shift"
+chars = "\u001B\r"

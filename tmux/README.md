@@ -23,19 +23,54 @@ Back up an existing `~/.tmux.conf` before creating the link.
   - [tmux-logging](https://github.com/tmux-plugins/tmux-logging)
   - [tmux-ukiyo](https://github.com/Nybkox/tmux-ukiyo)
 
-  Start tmux, reload the configuration, then press `Ctrl-a I` to install TPM plugins. The configuration starts without TPM or plugin directories, so first installation is safe.
+  Start tmux, reload the configuration (`tmux source-file ~/.tmux.conf` or
+  `Ctrl-a` then `:source-file ~/.tmux.conf`), then press `Ctrl-a I` to
+  install TPM plugins interactively — or run TPM's installer directly for a
+  scripted setup: `~/.tmux/plugins/tpm/bin/install_plugins`. The
+  configuration starts without TPM or plugin directories, so first
+  installation is safe; `Ctrl-a U` updates plugins later.
 
-- **tmuxscope, installed from its upstream repository:**
+- **tmuxscope, built from its upstream repository:**
   [https://github.com/REDACTED-REDACTED/tmuxscope](https://github.com/REDACTED-REDACTED/tmuxscope)
 
-  The current setup uses tmuxscope 0.2.2, installed through Bun, and expects the `tmuxscope` executable on `PATH`. The scope definitions are tracked in `tmux/tmux-scopes.conf`; install them with:
+  There's no published package — clone and build it with Bun, matching this
+  repo's own `tools = ~/repos/tools` scope in `tmux/tmux-scopes.conf`:
+
+  ```sh
+  mkdir -p "$HOME/repos/tools"
+  git clone https://github.com/REDACTED-REDACTED/tmuxscope.git "$HOME/repos/tools/tmuxscope"
+  cd "$HOME/repos/tools/tmuxscope"
+  bun install
+  bun run build
+  bun link
+  ```
+
+  `bun link` (run inside the cloned repo) registers the package globally and
+  symlinks its compiled binary onto `bun`'s global bin dir
+  (`~/.bun/bin/tmuxscope`, already on `PATH` via `zsh/.config/zsh/rc.d/`) —
+  no separate install step needed. Verify with `tmuxscope --version`
+  (tested against 0.2.2, matching `package.json` at clone time). Requires
+  tmux ≥ 3.0, zsh, and Bun ≥ 1.2 (all satisfied by this repo's zsh setup).
+
+  The scope definitions are tracked in `tmux/tmux-scopes.conf`; install
+  them with:
 
   ```sh
   mkdir -p "$HOME/.config"
   ln -sfn "$HOME/my-setup/tmux/tmux-scopes.conf" "$HOME/.config/tmux-scopes.conf"
   ```
 
-  The file uses `~`-relative paths, so it does not contain this machine's username. Adjust the scope patterns for projects on a new machine. Create the file from the upstream `tmux-scopes.conf.example` if the repository layout differs. The tmux integration is loaded with `tmuxscope hook tmux`; the zsh integration is loaded separately by the setup's zsh hook.
+  The file uses `~`-relative paths, so it does not contain this machine's
+  username, but the *directories themselves* are still one person's actual
+  project layout — **adjust the scope patterns for projects on a new
+  machine** (some may simply not exist yet there, which is harmless:
+  `tmuxscope doctor` reports a `missing directory` note for an absent scope
+  pattern but changes nothing). Create the file from the upstream
+  `tmux-scopes.conf.example` if the repository layout differs. The tmux
+  integration is loaded with `tmuxscope hook tmux`; the zsh integration is
+  loaded separately by `zsh/.config/zsh/rc.d/40-hooks.zsh`
+  (`eval "$(tmuxscope hook zsh)"`, already guarded by `command -v
+  tmuxscope`).
 
 ## Optional conveniences
 

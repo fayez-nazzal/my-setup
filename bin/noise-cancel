@@ -1,0 +1,91 @@
+#!/bin/sh
+set -eu
+
+# RNNoise PipeWire filter node/config for this machine's USB headset —
+# rename FILTER_SOURCE/RAW_SOURCE for your own hardware and RNNoise setup.
+FILTER_SOURCE='me6s_voice_isolation'
+RAW_SOURCE='alsa_input.usb-ME6S_MS_N-B_R-UN__3db_ME6S-00.mono-fallback'
+CONFIG="$HOME/.config/pipewire/pipewire.conf.d/60-me6s-voice-isolation.conf"
+DISABLED_CONFIG="${CONFIG}.disabled"
+
+move_recording_streams() {
+    target=$1
+    pactl list short source-outputs | while IFS="$(printf '\t')" read -r id source client rest; do
+        [ -n "$id" ] || continue
+        [ "$client" = '-' ] && continue
+        pactl move-source-output "$id" "$target" 2>/dev/null || true
+    done
+}
+
+wait_for_source() {
+    source_name=$1
+    attempts=0
+    until pactl get-source-volume "$source_name" >/dev/null 2>&1; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 50 ]; then
+            echo "Microphone source did not appear: $source_name" >&2
+            exit 1
+        fi
+        sleep 0.1
+    done
+}
+
+set_default_source() {
+    source_name=$1
+    source_id=$(pw-dump | jq -r --arg name "$source_name" \
+        'first(.[] | select(.type == "PipeWire:Interface:Node" and .info.props["node.name"] == $name) | .id) // empty')
+    if [ -z "$source_id" ]; then
+        echo "Microphone source not found: $source_name" >&2
+        exit 1
+    fi
+    wpctl set-default "$source_id"
+}
+
+restart_audio() {
+    systemctl --user restart pipewire wireplumber pipewire-pulse
+}
+
+case "${1:-status}" in
+    on)
+        if [ -f "$DISABLED_CONFIG" ]; then
+            mv "$DISABLED_CONFIG" "$CONFIG"
+            restart_audio
+        elif ! pactl get-source-volume "$FILTER_SOURCE" >/dev/null 2>&1; then
+            restart_audio
+        fi
+        wait_for_source "$FILTER_SOURCE"
+        set_default_source "$FILTER_SOURCE"
+        move_recording_streams "$FILTER_SOURCE"
+        echo 'Noise cancellation: ON'
+        ;;
+    off)
+        set_default_source "$RAW_SOURCE"
+        move_recording_streams "$RAW_SOURCE"
+        restart_needed=false
+        if [ -f "$CONFIG" ]; then
+            mv "$CONFIG" "$DISABLED_CONFIG"
+            restart_needed=true
+        fi
+        if pactl get-source-volume "$FILTER_SOURCE" >/dev/null 2>&1; then
+            restart_needed=true
+        fi
+        if [ "$restart_needed" = true ]; then
+            restart_audio
+            wait_for_source "$RAW_SOURCE"
+            set_default_source "$RAW_SOURCE"
+        fi
+        echo 'Noise cancellation: OFF'
+        ;;
+    status)
+        if pactl get-source-volume "$FILTER_SOURCE" >/dev/null 2>&1; then
+            echo 'Noise cancellation: ON'
+        else
+            echo 'Noise cancellation: OFF'
+        fi
+        echo "Default microphone: $(pactl get-default-source)"
+        ;;
+    *)
+        echo 'Usage: noise-cancel {on|off|status}' >&2
+        exit 2
+        ;;
+esac
