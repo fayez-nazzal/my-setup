@@ -3,15 +3,21 @@
 # Portable by design:
 # - monitor assignments use semantic selectors (`main`/`secondary`), not names
 # - helper scripts resolve through $HOME, not a machine-specific username
-# - window rules use the current predicate/interpolation syntax
+# - window rules use the table-based `if.*` predicate syntax (this AeroSpace
+#   build does not support the newer `test %{...}` shell-like predicate string)
 #
 # AeroSpace does not support TOML variables, includes, or generated keys. Keep
 # workspace names and key bindings explicit: they are part of the public
 # keyboard contract, while machine-specific values belong in the selectors below.
+#
+# Current workspace usage:
+#   1 -> Terminal (Ghostty)      3 -> Editor (Zed/Cursor)   P -> 1Password
+#   2 -> Browser (Chrome)        4 -> MS Teams (all windows) O -> Obsidian
+#   S -> Safari                  X -> XMind
+#   Q, W -> free for anything else
 
 config-version = 2
 start-at-login = true
-auto-reload-config = true
 automatically-unhide-macos-hidden-apps = true
 
 # Keep i3-like behavior. Enable these when you want AeroSpace to normalize
@@ -24,36 +30,23 @@ on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 on-focus-changed = ['move-mouse window-lazy-center']
 
 # Workspaces that should exist even before a window is assigned to them.
-persistent-workspaces = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
-  'G', 'R', 'F', 'I', 'N', 'Q', 'W', 'A', 'S', 'D', 'T', 'Z', 'C', 'M', 'P',
-  'O', 'U']
+persistent-workspaces = ['1', '2', '3', '4', 'P', 'O', 'X', 'S', 'Q', 'W']
 
 # Window rules are expressed as one TOML array so rule order is visible and
 # easy to move/share. The first matching callback wins unless it opts in to
 # check-further-callbacks.
 on-window-detected = [
-  { if = 'test %{app-bundle-id} = com.mitchellh.ghostty && test %{window-title} ~= "^termshot-"', run = ['layout floating'] },
-  { if = 'test %{app-bundle-id} = com.mitchellh.ghostty', run = ['layout tiling', 'move-node-to-workspace G --focus-follows-window'] },
-  { if = 'test %{app-bundle-id} = com.example.focus-cards', run = ['layout tiling', 'move-node-to-workspace G', 'exec-and-forget $HOME/.config/aerospace/focus-cards-layout.sh'] },
-  { if = 'test %{app-name} ~= "Cursor" || test %{app-name} ~= "Zed"', run = ['move-node-to-workspace 1'] },
-  { if = 'test %{app-name} ~= "Chrome" && test %{window-title} ~= "Your Name \\(your-site\\.tld\\)$"', run = ['move-node-to-workspace Z'] },
-  { if = 'test %{app-name} ~= "Chrome" && test %{window-title} ~= "Your Name$"', run = ['move-node-to-workspace W'] },
-  { if = 'test %{app-name} ~= "Chrome"', run = ['move-node-to-workspace 2'] },
-  { if = 'test %{app-name} ~= "Teams" || test %{app-name} ~= "Slack"', run = ['move-node-to-workspace 3'] },
-  { if = 'test %{app-name} ~= "Safari"', run = ['move-node-to-workspace S'] },
-  { if = 'test %{app-name} ~= "Notes"', run = ['move-node-to-workspace N'] },
-  { if = 'test %{app-name} ~= "1Password"', run = ['move-node-to-workspace P'] },
-  { if = 'test %{app-name} ~= "Char"', run = ['move-node-to-workspace C'] },
-  { if = 'test %{app-name} ~= "Mail"', run = ['move-node-to-workspace M'] },
-  { if = 'test %{app-name} ~= "Todoist"', run = ['move-node-to-workspace T'] },
-  { if = 'test %{app-bundle-id} = md.obsidian', run = ['layout tiling', 'move-node-to-workspace O', 'exec-and-forget $HOME/.config/aerospace/obsidian-fullscreen.sh'] },
-  { if = 'test %{app-bundle-id} = info.eurocomp.Timing-setapp', run = ['move-node-to-workspace T'] },
-  { if = 'test %{app-bundle-id} = com.apple.reminders', run = ['layout tiling', 'move-node-to-workspace R'] },
-  { if = 'test %{app-bundle-id} = com.apple.finder', run = ['layout tiling', 'move-node-to-workspace F', 'exec-and-forget $HOME/.config/aerospace/finder-single.sh'] },
-  { if = 'test %{app-bundle-id} = com.coteditor.CotEditor', run = ['layout tiling', 'exec-and-forget $HOME/.config/aerospace/coteditor-single.sh'] },
-  { if = 'test %{app-bundle-id} = com.apple.Preview', run = ['layout tiling', 'move-node-to-workspace I'] },
-  { if = 'test %{app-name} ~= "Ulysses"', run = ['move-node-to-workspace U'] },
+  { if.app-id = 'com.mitchellh.ghostty', run = ['layout tiling', 'move-node-to-workspace 1'] },
+  { if.app-id = 'com.google.Chrome', run = ['move-node-to-workspace 2'] },
+  { if.app-id = 'dev.zed.Zed', run = ['move-node-to-workspace 3'] },
+  { if.app-name-regex-substring = 'Cursor', run = ['move-node-to-workspace 3'] },
+  { if.app-id = 'com.microsoft.teams2', run = ['move-node-to-workspace 4'] },
+  { if.app-id = 'com.1password.1password', run = ['move-node-to-workspace P'] },
+  { if.app-id = 'md.obsidian', run = ['layout tiling', 'move-node-to-workspace O', 'exec-and-forget $HOME/.config/aerospace/obsidian-fullscreen.sh'] },
+  { if.app-name-regex-substring = 'XMind', run = ['move-node-to-workspace X'] },
+  { if.app-id = 'com.apple.Safari', run = ['move-node-to-workspace S'] },
 ]
+
 [gaps]
 inner.horizontal = 8
 inner.vertical = 8
@@ -61,36 +54,6 @@ outer.left = 8
 outer.right = 8
 outer.top = 8
 outer.bottom = 8
-
-# Semantic monitor selectors make this shareable across machines. `main` is
-# the primary display; `secondary` is the other display when two are present.
-[workspace-to-monitor-force-assignment]
-G = 'secondary'
-R = 'secondary'
-F = 'secondary'
-I = 'secondary'
-N = 'secondary'
-1 = 'main'
-2 = 'main'
-3 = 'main'
-4 = 'main'
-5 = 'main'
-6 = 'main'
-7 = 'main'
-8 = 'main'
-9 = 'main'
-10 = 'main'
-Q = 'main'
-W = 'main'
-A = 'main'
-S = 'main'
-D = 'main'
-T = 'main'
-Z = 'main'
-C = 'main'
-M = 'main'
-P = 'main'
-O = 'main'
 
 [mode.main.binding]
 # Smart Ghostty summon: focus the single window if open, else launch it.
@@ -123,23 +86,12 @@ alt-7 = 'workspace 7'
 alt-8 = 'workspace 8'
 alt-9 = 'workspace 9'
 alt-0 = 'workspace 10'
-alt-n = 'workspace N'
-alt-t = 'workspace T'
-alt-g = 'workspace G'
 alt-s = 'workspace S'
-alt-a = 'workspace A'
 alt-q = 'workspace Q'
 alt-w = 'workspace W'
 alt-p = 'workspace P'
-alt-c = 'workspace C'
-alt-m = 'workspace M'
-alt-d = 'workspace D'
 alt-o = 'workspace O'
-alt-r = 'workspace R'
-alt-f = ['workspace F', 'exec-and-forget $HOME/.config/aerospace/finder-single.sh']
-alt-i = 'workspace I'
-alt-z = 'workspace Z'
-alt-u = 'workspace U'
+alt-x = 'workspace X'
 
 # Move the focused window to a workspace.
 alt-shift-1 = 'move-node-to-workspace 1'
@@ -152,22 +104,12 @@ alt-shift-7 = 'move-node-to-workspace 7'
 alt-shift-8 = 'move-node-to-workspace 8'
 alt-shift-9 = 'move-node-to-workspace 9'
 alt-shift-0 = 'move-node-to-workspace 10'
-alt-shift-t = 'move-node-to-workspace T'
 alt-shift-q = 'move-node-to-workspace Q'
 alt-shift-w = 'move-node-to-workspace W'
-alt-shift-u = 'move-node-to-workspace U'
-alt-shift-a = 'move-node-to-workspace A'
 alt-shift-s = 'move-node-to-workspace S'
-alt-shift-n = 'move-node-to-workspace N'
-alt-shift-m = 'move-node-to-workspace M'
-alt-shift-c = 'move-node-to-workspace C'
 alt-shift-p = 'move-node-to-workspace P'
-alt-shift-g = 'move-node-to-workspace G'
-alt-shift-d = 'move-node-to-workspace D'
 alt-shift-o = 'move-node-to-workspace O'
-alt-shift-r = 'move-node-to-workspace R'
-alt-shift-f = 'move-node-to-workspace F'
-alt-shift-z = 'move-node-to-workspace Z'
+alt-shift-x = 'move-node-to-workspace X'
 
 alt-e = 'mode resize'
 alt-shift-e = 'reload-config'
@@ -179,4 +121,3 @@ k = 'resize height -50'
 l = 'resize width +50'
 enter = 'mode main'
 esc = 'mode main'
-
