@@ -82,8 +82,20 @@ here too:
 `i3 exec` and `rofi`-launched processes inherit the X session's
 environment, not your interactive zsh shell's — `PATH`/`VOLTA_HOME`/etc.
 set in `zsh/.zshenv` or `zsh/.config/zsh/rc.d/*` are invisible to them.
-This machine's `~/.profile` (not part of this repo — it's a stock Debian
-file, read by the display manager's `Xsession` regardless of login shell)
-carries the subset of env needed session-wide (`PATH`, `VOLTA_HOME`,
-`LIBVA_DRIVER_NAME`). If a GUI app can't find something on `PATH`, that's
-where to add it, not the zsh dotfiles.
+
+On this machine (lightdm handing `i3` straight to `Xsession` as the
+session's `STARTUP` program) `~/.profile` is **not** read at all — only a
+login shell reads it, and lightdm never starts one for a picked desktop
+session. The file that's actually sourced for every graphical login,
+regardless of session choice, is `~/.xsessionrc` (via Debian's
+`/etc/X11/Xsession.d/40x11-common_xsessionrc`); it's what carries `PATH`
+(`$HOME/.local/bin` first, so `bin/alacritty`'s wrapper — see
+[`../bin/README.md`](../bin/README.md) — actually gets resolved by rofi
+drun and any bare `alacritty`) and `LIBVA_DRIVER_NAME` session-wide. Like
+`~/.profile`, `~/.xsessionrc` isn't part of this repo (verify what your
+display manager actually sources before assuming `.profile` works — check
+a running session process's env, e.g. `cat /proc/<i3-child-pid>/environ |
+tr '\0' '\n' | grep ^PATH=`). If a GUI app can't find something on
+`PATH`, add it there, not the zsh dotfiles — and log out/in afterward,
+since already-running session processes (i3, rofi, anything it spawned)
+keep whatever `PATH` they started with.
