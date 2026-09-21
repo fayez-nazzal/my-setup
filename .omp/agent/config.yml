@@ -30,8 +30,8 @@ modelRoles:
   writer: openai-api/gpt-6-astra:high
   smol: openai-codex/gpt-5.6-luna:medium
   default: anthropic/claude-sonnet-5:high
-  # OMP's Perplexity API-key adapter uses Sonar Pro; web roles do not
-  # support chat-style thinking suffixes.
+  # The native extension routes web_search to Perplexity's Search API.
+  # Keep the role pointed at Perplexity for OMP's model-kind selection.
   web: web/perplexity
 retry:
   fallbackChains:
