@@ -21,7 +21,9 @@ optional and checked with `command -v` before use.
 
 ```
 .
-├── .aerospace.toml     AeroSpace tiling window manager config (macOS)
+├── AGENTS.md            Index for an AI agent asked to install this repo
+├── install.sh           Idempotent bootstrap: detects OS, symlinks + installs
+├── .aerospace.toml      AeroSpace tiling window manager config (macOS)
 ├── i3/
 │   ├── config            i3 config (Linux/Debian)
 │   ├── i3status/status.py  Custom Python i3bar status line
@@ -88,11 +90,27 @@ skipped.
 
 ## Setup
 
-Clone the repo, then symlink the pieces you want.
+Clone the repo, then either run the bootstrap script or symlink the
+pieces you want by hand.
 
 ```sh
 git clone git@github.com:REDACTED-REDACTED/my-setup.git "$HOME/my-setup"
+"$HOME/my-setup/install.sh"
 ```
+
+`install.sh` is idempotent (safe to re-run), detects your OS, symlinks
+every piece below, backs up any pre-existing real file/directory it
+would otherwise replace, and installs what it safely can (packages,
+plugins, recommended CLI tools). It deliberately does **not** invent a
+personal identity, hardware ID, or secret, and does **not** apply one
+machine's hardware-specific values (monitor names, window classes,
+device IDs) to another — it prints exactly what still needs your input
+in a "needs your attention" summary at the end. An AI coding agent
+asked to set this repo up should read [`AGENTS.md`](AGENTS.md) first.
+
+The sections below explain what each piece does and how to do it by
+hand instead, if you'd rather not run the script (or need to adjust one
+piece without touching the rest).
 
 ### zsh
 
@@ -174,8 +192,11 @@ curl -sSL "https://github.com/eza-community/eza/releases/download/v0.23.5/eza_x8
   | tar xz -C "$HOME/.local/bin"
 ```
 
-`zsh-abbr` has no `apt` package; install it manually (no Homebrew
-required):
+#### zsh-abbr
+
+No `apt` package and no official installer script; install it manually
+(no Homebrew required either — `install.sh` does this automatically on a
+machine without Homebrew):
 
 ```sh
 git clone https://github.com/olets/zsh-abbr --recurse-submodules \

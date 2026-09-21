@@ -1,0 +1,4 @@
+# Editor/OS artifacts that can land anywhere in the tree.
+*.swp
+*.swo
+.DS_Store
