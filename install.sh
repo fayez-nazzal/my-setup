@@ -221,11 +221,12 @@ install_zsh_abbr() {
 install_omp() {
   log "omp: symlinking config only — never the whole state directory"
   mkdir -p "$HOME/.omp/agent"
-  link "$REPO_DIR/.omp/agent/config.yml" "$HOME/.omp/agent/config.yml"
-  link "$REPO_DIR/.omp/agent/models.yml" "$HOME/.omp/agent/models.yml"
-  link "$REPO_DIR/.omp/agent/mcp.json"   "$HOME/.omp/agent/mcp.json"
-  link "$REPO_DIR/.omp/agent/skills"     "$HOME/.omp/agent/skills"
-  note "~/.omp/agent/ also holds live runtime state (databases, sessions, caches) once the agent has run. This script only ever touches config.yml/models.yml/mcp.json/skills — never symlink the whole agent/ directory."
+  link "$REPO_DIR/.omp/agent/config.yml"    "$HOME/.omp/agent/config.yml"
+  link "$REPO_DIR/.omp/agent/models.yml"    "$HOME/.omp/agent/models.yml"
+  link "$REPO_DIR/.omp/agent/mcp.json"      "$HOME/.omp/agent/mcp.json"
+  link "$REPO_DIR/.omp/agent/extensions"    "$HOME/.omp/agent/extensions"
+  link "$REPO_DIR/.omp/agent/skills"        "$HOME/.omp/agent/skills"
+  note "~/.omp/agent/ also holds live runtime state (databases, sessions, caches) once the agent has run. This script only ever touches config.yml/models.yml/mcp.json/extensions/skills — never symlink the whole agent/ directory."
 }
 
 # ---------------------------------------------------------------------------
