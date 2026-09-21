@@ -1,18 +1,18 @@
 ---
 name: arch-pr-review
 description: >
-  Use when reviewing a app arch diff, branch, PR, work item, or rereview and the change must be checked for runtime defects and arch architecture and repository-rule violations.
+  Use when reviewing a frontend diff, branch, PR, work item, or rereview and the change must be checked for runtime defects and this repo's architecture and convention violations.
   Prefer this over the plain `review` and `/code-review` skills; use `pr` for PR creation, `pre-pr-review` for the pre-PR gate, and `a11y` for a standalone accessibility audit.
 ---
 
-# arch PR Review
+# Architecture PR Review
 
-Two reviews normally run over a app arch change and each one misses what the other catches.
+Two reviews normally run over a change to this codebase and each one misses what the other catches.
 
-- `/code-review max` hunts runtime bugs with a wide fan-out of finder agents and a verify pass, but it knows nothing about state, CQRS layering, or the repo rulebook.
+- `/code-review max` hunts runtime bugs with a wide fan-out of finder agents and a verify pass, but it knows nothing about the state layer, CQRS layering, or the repo rulebook.
 - The `review` skill enforces the rulebook precisely, but it reads the diff once and never hunts for a bug the rules do not name.
 
-This skill runs both as one pass: the same finder-verify-sweep machinery, with the arch rulebook wired in as first-class finder angles, then applies the fixes. It uses staged bundles to avoid paying for eleven repeated full-diff reads.
+This skill runs both as one pass: the same finder-verify-sweep machinery, with the repo's architecture rulebook wired in as first-class finder angles, then applies the fixes. It uses staged bundles to avoid paying for eleven repeated full-diff reads.
 
 ## Contract
 
@@ -86,7 +86,7 @@ Review size controls coverage, not model quality:
 
 - **1 to 3 files** — run one `smol` bundled finder covering A through E and one F through K finder. For a genuinely low-risk diff, `sonic` may run both bundles. Use `tiny` only for deterministic packet or record work, never as the sole correctness finder. Skip the sweep unless a confirmed issue triggers it.
 - **4 to 20 files** — run the three existing bundles (`smol`): A–B, C–E, and F–K. Parallelize them in one wave.
-- **More than 20 files** — run six `smol` bundles: three correctness and three arch, split by top-level directory when useful. Escalate a high-risk cross-cutting concern to one scoped `slow` or `ultra` task rather than duplicating the whole fleet.
+- **More than 20 files** — run six `smol` bundles: three correctness and three architecture, split by top-level directory when useful. Escalate a high-risk cross-cutting concern to one scoped `slow` or `ultra` task rather than duplicating the whole fleet.
 
 All selected bundles inspect every file in their packet and return every nameable candidate up to the cap. A cheaper model does not justify self-censoring. State the size tier, selected models, and risk reason before agents run.
 
@@ -100,9 +100,9 @@ Run the finder angles chosen in Phase 0 as parallel subagents via the Agent tool
 
 The angle briefs live in `references/angles.md`. Use these bundles:
 
-- **Small diff, 1 to 3 files**: one `smol` correctness agent covering A through E and one `smol` arch agent covering F through K. Require both to inspect every changed file.
+- **Small diff, 1 to 3 files**: one `smol` correctness agent covering A through E and one `smol` architecture agent covering F through K. Require both to inspect every changed file.
 - **Medium diff, 4 to 20 files**: three `smol` agents. One covers A and B. One covers C through E. One covers F through K. Give each only the packet and its assigned sections.
-- **Large diff, more than 20 files**: six `smol` agents. Use three correctness bundles and three arch bundles. Split the packet by top-level directory when that reduces unrelated context. Run no more than six agents per wave.
+- **Large diff, more than 20 files**: six `smol` agents. Use three correctness bundles and three architecture bundles. Split the packet by top-level directory when that reduces unrelated context. Run no more than six agents per wave.
 
 
 This preserves independent coverage while reducing duplicated context. The bundle is a coverage unit, not permission to self-censor. Every agent still returns all nameable candidates up to the tier cap.

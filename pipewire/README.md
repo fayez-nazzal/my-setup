@@ -24,7 +24,7 @@ and install it to `~/.local/lib/ladspa/librnnoise_ladspa.so`, or edit the
 `plugin =` path in the config to wherever you installed it.
 
 **This file hardcodes an absolute path with a username
-(`/home/REDACTED/.local/lib/ladspa/...`) instead of `$HOME`** — unlike this
+(`/home/<username>/.local/lib/ladspa/...`) instead of `$HOME`** — unlike this
 repo's shell configs, PipeWire's config format (SPA-JSON) does not expand
 environment variables, so the path can't be made portable the usual way.
 Edit that one line for your own username/install path before symlinking on

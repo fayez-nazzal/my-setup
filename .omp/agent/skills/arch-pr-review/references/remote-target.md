@@ -2,7 +2,7 @@
 
 Use this when the user gave a PR link or number, a work item id, a branch name, or said `rereview`. All four resolve through the same flow.
 
-Defaults: repo `app-frontend`, project `app Frontend`, `targetBranch` = `staging`.
+Defaults: repo `<repo>`, project `<project>`, `targetBranch` = `main`. Fill these in for your own Azure DevOps org, or ask the user once and reuse the answer for the rest of the conversation.
 
 ## 1. Resolve the target
 
@@ -17,7 +17,7 @@ From PR metadata set `sourceBranch` and `targetBranch`, stripping `refs/heads/`.
 
 ### Finding the PR by branch
 
-List active PRs matching all of: `sourceRefName` = `refs/heads/<sourceBranch>`, `targetRefName` = `refs/heads/staging`, `status` = `Active`.
+List active PRs matching all of: `sourceRefName` = `refs/heads/<sourceBranch>`, `targetRefName` = `refs/heads/<targetBranch>`, `status` = `Active`.
 
 - Exactly one match — load it and its work items.
 - No match — there is no PR yet. Skip the metadata and go straight to the git diff.
@@ -31,12 +31,12 @@ Without MCP, use REST through `az rest`, which needs the resource GUID:
 
 ```bash
 az rest --method get --resource 499b84ac-1321-427f-aa17-267ca6975798 \
-  --url "https://dev.azure.com/app-org/app%20Frontend/_apis/git/repositories/app-frontend/pullRequests/<id>?api-version=7.1"
+  --url "https://dev.azure.com/<org>/<project>/_apis/git/repositories/<repo>/pullRequests/<id>?api-version=7.1"
 ```
 
 `az repos pr thread` does not exist in the installed az version, so read threads through REST at `.../pullRequests/<id>/threads?api-version=7.1` rather than polling a command that will never work.
 
-If neither MCP nor `az` is available, set `targetBranch` = `staging`, take `sourceBranch` from the input, and proceed git-only. When the input was a PR id with no branch name, ask for the branch.
+If neither MCP nor `az` is available, set `targetBranch` = `main`, take `sourceBranch` from the input, and proceed git-only. When the input was a PR id with no branch name, ask for the branch.
 
 ## 2. Fetch and diff
 
@@ -64,7 +64,7 @@ Ask the API which work items are linked rather than trusting what the PR body or
 
 ```bash
 az rest --method get --resource 499b84ac-1321-427f-aa17-267ca6975798 \
-  --url "https://dev.azure.com/app-org/app%20Frontend/_apis/git/repositories/app-frontend/pullRequests/<id>/workitems?api-version=7.1"
+  --url "https://dev.azure.com/<org>/<project>/_apis/git/repositories/<repo>/pullRequests/<id>/workitems?api-version=7.1"
 ```
 
 An empty list means no ticket, so review the code alone and say so. Otherwise load each work item and let its type decide how much of it counts.

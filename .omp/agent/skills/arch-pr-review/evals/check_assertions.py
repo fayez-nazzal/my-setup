@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Score the scriptable assertions for a arch-pr-review eval run.
+"""Score the scriptable assertions for an arch-pr-review eval run.
 
 Usage: python check_assertions.py <run_dir>
 where <run_dir> holds outputs/findings.json, outputs/review.md, outputs/fixes.diff
@@ -11,7 +11,7 @@ from pathlib import Path
 
 REQUIRED_FIELDS = ["file", "line", "summary", "short_summary", "failure_scenario", "category"]
 RULE_SOURCES = [".coderabbit.yaml", ".ai/knowledge", "CLAUDE.md", "CLAUDE.local.md", "review-rules"]
-arch_CATEGORIES = {
+ARCH_CATEGORIES = {
     "architecture",
     "conventions",
     "convention",
@@ -68,17 +68,17 @@ def check_cites_rule_source(findings, review):
     blob = json.dumps(findings) + review
     hits = [source for source in RULE_SOURCES if source in blob]
     passed = len(hits) > 0
-    return passed, f"cited: {', '.join(hits)}" if hits else "no arch rule source named anywhere"
+    return passed, f"cited: {', '.join(hits)}" if hits else "no architecture rule source named anywhere"
 
 
 def check_arch_category(findings):
     found = set()
     for finding in findings:
         category = (finding.get("category") or "").lower()
-        if category in arch_CATEGORIES:
+        if category in ARCH_CATEGORIES:
             found.add(category)
     passed = len(found) > 0
-    return passed, f"arch categories present: {', '.join(sorted(found))}" if found else "only generic categories"
+    return passed, f"architecture categories present: {', '.join(sorted(found))}" if found else "only generic categories"
 
 
 def check_fix_style(run_dir):

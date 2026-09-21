@@ -190,7 +190,7 @@ EOF
       log "tmux: building tmuxscope (no published package — see tmux/README.md)"
       mkdir -p "$HOME/repos/tools"
       if [ ! -d "$HOME/repos/tools/tmuxscope" ]; then
-        git clone --quiet https://github.com/REDACTED-REDACTED/tmuxscope.git "$HOME/repos/tools/tmuxscope"
+        git clone --quiet https://github.com/<your-username>/tmuxscope.git "$HOME/repos/tools/tmuxscope"
       fi
       (cd "$HOME/repos/tools/tmuxscope" && bun install --silent && bun run build && bun link) \
         || warn "tmuxscope build failed — see tmux/README.md"
@@ -227,6 +227,15 @@ install_omp() {
   link "$REPO_DIR/.omp/agent/extensions"    "$HOME/.omp/agent/extensions"
   link "$REPO_DIR/.omp/agent/skills"        "$HOME/.omp/agent/skills"
   note "~/.omp/agent/ also holds live runtime state (databases, sessions, caches) once the agent has run. This script only ever touches config.yml/models.yml/mcp.json/extensions/skills — never symlink the whole agent/ directory."
+}
+
+install_humanize() {
+  log "humanize: symlinking CLI onto PATH"
+  mkdir -p "$HOME/.local/bin"
+  link "$REPO_DIR/bin/humanize/cli.ts" "$HOME/.local/bin/humanize"
+  if ! command -v bun >/dev/null 2>&1; then
+    warn "humanize: bun not found on PATH — the symlink is in place but the CLI won't run until bun is installed (https://bun.sh)"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -380,6 +389,7 @@ main() {
   install_tmux
   install_zsh_abbr
   install_omp
+  install_humanize
 
   case "$(uname -s)" in
     Darwin)
