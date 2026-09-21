@@ -1,3 +1,9 @@
+# Loaded by every interactive/login zsh via ~/.zshrc -> ~/.config/zsh/rc.d
+# (see ../lib/load.zsh) — edit here (or drop a new rc.d/*.zsh file) and it
+# takes effect in every new shell, tmux pane included, without touching
+# anything outside this repo.
+export EDITOR="${EDITOR:-vim}"
+
 export PATH="$HOME/.local/bin:$PATH"
 
 # pnpm's official installer uses different data dirs per OS; match it so

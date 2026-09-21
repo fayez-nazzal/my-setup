@@ -350,7 +350,7 @@ install_linux_desktop() {
   link "$REPO_DIR/i3/i3status/status.py" "$HOME/.config/i3status/status.py"
   link "$REPO_DIR/picom/picom.conf" "$HOME/.config/picom/picom.conf"
   link "$REPO_DIR/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
-  for f in alacritty-single audio-control noise-cancel; do
+  for f in alacritty audio-control noise-cancel; do
     link "$REPO_DIR/bin/$f" "$HOME/.local/bin/$f"
   done
 
