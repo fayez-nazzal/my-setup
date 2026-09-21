@@ -31,17 +31,17 @@ done
   in [`../pipewire/README.md`](../pipewire/README.md) on/off, and reports
   its status. Requires the same PipeWire tools plus `pactl`. Aliased as
   `ncon`/`ncoff`/`ncstatus`.
-- **`humanize`** — provider-agnostic AI-content-detection + personal-style
+- **`styleguard`** — provider-agnostic AI-content-detection + personal-style
   CLI: detect-scores a draft against Winston AI, rewrites low-scoring
   sentences with `gpt-6-astra` via the OpenAI Responses API, and enforces a
   deterministic personal style pass (no em/en-dash, contractions expanded,
-  no stacked punctuation), looping until a human-likeness threshold is met
-  or best-effort iterations are exhausted. Cross-platform (see
-  `install_humanize` in `../install.sh`, not the Linux-only desktop loop).
-  Requires `bun` and a signed-in `op` CLI with the `gowinston` and
-  `OMP OPENAI` 1Password items reachable. See
-  [`humanize/README.md`](humanize/README.md) for full usage, secret setup,
-  and config format.
+  no stacked punctuation), looping until a candidate clears both the
+  human-likeness threshold and a readability floor, or best-effort
+  iterations are exhausted. Cross-platform (see `install_styleguard` in
+  `../install.sh`, not the Linux-only desktop loop). Requires `bun` and a
+  signed-in `op` CLI with the `gowinston` and `OMP OPENAI` 1Password items
+  reachable. See [`styleguard/README.md`](styleguard/README.md) for full
+  usage, secret setup, and config format.
 
 The `alacritty`/`audio-control`/`noise-cancel` trio above is guarded with
 `command -v` in the zsh aliases that reference them, so a machine without

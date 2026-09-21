@@ -229,12 +229,12 @@ install_omp() {
   note "~/.omp/agent/ also holds live runtime state (databases, sessions, caches) once the agent has run. This script only ever touches config.yml/models.yml/mcp.json/extensions/skills — never symlink the whole agent/ directory."
 }
 
-install_humanize() {
-  log "humanize: symlinking CLI onto PATH"
+install_styleguard() {
+  log "styleguard: symlinking CLI onto PATH"
   mkdir -p "$HOME/.local/bin"
-  link "$REPO_DIR/bin/humanize/cli.ts" "$HOME/.local/bin/humanize"
+  link "$REPO_DIR/bin/styleguard/cli.ts" "$HOME/.local/bin/styleguard"
   if ! command -v bun >/dev/null 2>&1; then
-    warn "humanize: bun not found on PATH — the symlink is in place but the CLI won't run until bun is installed (https://bun.sh)"
+    warn "styleguard: bun not found on PATH — the symlink is in place but the CLI won't run until bun is installed (https://bun.sh)"
   fi
 }
 
@@ -389,7 +389,7 @@ main() {
   install_tmux
   install_zsh_abbr
   install_omp
-  install_humanize
+  install_styleguard
 
   case "$(uname -s)" in
     Darwin)

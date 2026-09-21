@@ -52,7 +52,7 @@ optional and checked with `command -v` before use.
 └── .omp/agent/
     ├── config.yml       Oh My Pi UI/theme/model-role settings
     ├── models.yml       Custom model provider definitions (reads secrets via 1Password CLI)
-    ├── mcp.json         MCP server config (currently empty; see bin/humanize/)
+    ├── mcp.json         MCP server config (currently empty; see bin/styleguard/)
     ├── extensions/      Native OMP extensions
     └── skills/          Custom omp skills
 ```
@@ -313,7 +313,7 @@ custom model providers; API keys are resolved at runtime through the
 [1Password CLI](https://developer.1password.com/docs/cli/) (`op read
 op://...`), so no secret is stored in this repo — install and sign in to
 `op` for those providers to work. `mcp.json` declares OMP's MCP servers and
-is currently empty (kept symlinked for future use, see `bin/humanize/` for
+is currently empty (kept symlinked for future use, see `bin/styleguard/` for
 this repo's actual Winston AI AI-detection integration, a standalone CLI
 rather than an MCP server).
 `extensions/` contains the native Perplexity Search API web-search override;

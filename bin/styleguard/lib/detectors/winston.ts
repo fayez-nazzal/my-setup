@@ -92,6 +92,7 @@ export class WinstonDetector implements Detector {
 
     return {
       score: payload.score,
+      readabilityScore: typeof payload.readability_score === "number" ? payload.readability_score : null,
       sentences: (payload.sentences ?? []).map((s) => ({ text: s.text, score: s.score })),
       raw: payload,
     };

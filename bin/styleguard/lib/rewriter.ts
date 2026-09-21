@@ -23,6 +23,13 @@ function buildPrompt(input: RewriteInput): string {
     );
   }
 
+  if (input.readabilityHint) {
+    const { score, floor } = input.readabilityHint;
+    sections.push(
+      `The text scored ${score}/100 on a Flesch-Kincaid readability scale (target: ${floor}+, higher = easier to read). Simplify it: shorten sentences, cut nested/subordinate clauses, do not merge multiple ideas into one sentence, prefer plain subject-verb-object structure.`
+    );
+  }
+
   sections.push(`Style rules (must follow exactly):\n${input.styleConstraints.map((c) => `- ${c}`).join("\n")}`);
 
   sections.push(`Text to rewrite:\n${input.text}`);
