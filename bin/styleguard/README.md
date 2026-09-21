@@ -1,13 +1,18 @@
-# humanize
+# styleguard
 
 Provider-agnostic AI-content-detection + personal-style CLI. Detect-scores a
 draft against Winston AI, rewrites low-scoring sentences with `gpt-6-astra`
 directly through the OpenAI Responses API, and enforces a deterministic
 personal style pass (no em/en-dash, contractions expanded, no stacked
-punctuation, banned-phrase steer) before every re-score. Loops until a
-human-likeness threshold is met or `--max-iterations` is exhausted, and
-always returns the best-scoring text seen — it never fails just because the
-threshold was not reached.
+punctuation, banned-phrase steer — regex/string rules only, no LLM call is
+ever involved in this pass) once before the very first detect call and once
+more on whichever candidate is finally chosen. Loops until a candidate
+clears BOTH the human-likeness threshold and a readability floor, or
+`--max-iterations` is exhausted. Winston is a single vendor's opinion, never
+the sole gate on what ships: a candidate that also clears the readability
+floor always beats one that scores higher on AI-detection alone but reads
+as harder to parse, and the run always returns the best text seen — it
+never fails just because a threshold was not reached.
 
 ## Requirements
 
@@ -43,31 +48,37 @@ either — see `lib/loop.ts` / `cli.ts`'s pre-loop gate.
 ## Usage
 
 ```sh
-humanize --mode polish --in draft.txt --out draft.humanized.txt
-humanize --mode grounded --in draft.txt --context packet.txt --out draft.humanized.txt \
-  --threshold 90 --max-iterations 4 --log-dir ~/.local/state/humanize
+styleguard --mode polish --in draft.txt --out draft.polished.txt
+styleguard --mode grounded --in draft.txt --context packet.txt --out draft.polished.txt \
+  --threshold 90 --readability-floor 50 --max-iterations 4 --log-dir ~/.local/state/styleguard
 ```
 
 - `--mode polish|grounded` (required) — `grounded` also requires `--context
   <file>` (a verified facts packet the rewrite must never drift from).
 - `--in <file>` / `--out <file>` (required) — both are file paths;
   `--out`'s contents carry **final text only**, never score/JSON/diagnostics.
-- `--threshold <0-100>` — default `90`.
+- `--threshold <0-100>` — default `90`. Winston human-likeness score to stop
+  at.
+- `--readability-floor <0-100>` — default `50`. Minimum Winston
+  `readability_score` (Flesch-Kincaid reading ease, higher = easier) a
+  candidate must clear to count as "good enough." A candidate scoring above
+  `--threshold` but below this floor is never preferred over one that clears
+  both — see [Detection semantics](#detection-semantics) below.
 - `--max-iterations <n>` — default `4`.
-- `--log-dir <dir>` — default `~/.local/state/humanize`. A JSON-lines run log
+- `--log-dir <dir>` — default `~/.local/state/styleguard`. A JSON-lines run log
   (score history, iteration count, flagged sentences, API errors) is written
   here per run, for a human to `tail`/read manually. Only the log file
   **path** is printed, to stderr — the calling skill/agent must never pipe
   the log's contents back into an LLM/agent context.
 - `--config <file>` — JSON file overriding `lib/style-rules.json`'s
-  `bannedPhrases`/`hardRules` and/or the `threshold`/`maxIterations`
-  defaults. Shape:
+  `bannedPhrases`/`hardRules` and/or the `threshold`/`readabilityFloor`/
+  `maxIterations` defaults. Shape:
 
   ```json
   {
     "bannedPhrases": ["delve", "..."],
     "hardRules": { "noDashPunctuation": true, "expandContractions": true, "noStackedPunctuation": true },
-    "defaults": { "threshold": 92, "maxIterations": 3 }
+    "defaults": { "threshold": 92, "readabilityFloor": 55, "maxIterations": 3 }
   }
   ```
 
@@ -79,12 +90,34 @@ reached `--threshold` — that is expected best-effort behavior. Non-zero exit
 only for hard usage errors: missing `--in` file, unreadable `--config`, or an
 unresolved required secret.
 
+## Detection semantics
+
+Winston's response carries two independent numbers per detect call: the
+AI-detection `score` (0-100, higher = more human-like) and a
+`readability_score` (0-100, Flesch-Kincaid reading ease, higher = easier to
+read; Winston computes this from sentence length/syllable density, it says
+nothing about AI authorship). `lib/loop.ts` logs both on every `score`
+event and never treats the AI-detection score alone as "done": a candidate
+is accepted as best only once it clears `--readability-floor` too, and the
+loop separately tracks the best AI-score-only candidate purely as a
+never-block fallback for when nothing ever clears the readability floor
+(still logged, via `readabilityFloorMet: false` on the `exhausted` event).
+This means the loop can, and deliberately does, prefer a *lower*
+AI-detection-scoring candidate over a higher-scoring one that reads as
+noticeably harder to parse.
+
+Winston is also a single vendor's classifier, not a calibrated cross-vendor
+truth: passing its threshold is evidence, not proof, against any other
+AI-detection service (see Non-goals — no second detector is implemented).
+
 ## Style rules
 
-Hard rules (deterministic, enforced by regex on every rewrite before
-re-scoring, never left to the LLM alone):
+Hard rules (deterministic, enforced by regex/string ops on every rewrite
+before re-scoring, and once more on the final chosen text — never left to
+the LLM alone, and no LLM call is ever made to run this pass):
 
-- No em-dash (—) or en-dash (–) used as punctuation.
+- No em-dash (—) or en-dash (–) used as punctuation (replaced with a comma,
+  period, or comma-delimited parenthetical, grammatically as appropriate).
 - Contractions expanded to full words (`don't` → `do not`, etc.), except
   `it's`, which is genuinely ambiguous ("it is" vs "it has") and is left as a
   documented limitation — the rewrite prompt is told to avoid it instead.
@@ -92,8 +125,8 @@ re-scoring, never left to the LLM alone):
 
 `lib/style-rules.json` also ships an editable, non-fixed suggestion list of
 overused AI-sounding phrases (`delve`, `tapestry`, `leverage`, ...) folded
-into the same rewrite prompt as the humanization pass. Edit that file (or
-override it via `--config`) freely.
+into the same rewrite prompt as the style pass. Edit that file (or override
+it via `--config`) freely.
 
 ## Architecture
 

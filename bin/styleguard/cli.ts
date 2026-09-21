@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// humanize: provider-agnostic AI-content-detection + personal-style CLI.
+// styleguard: provider-agnostic AI-content-detection + personal-style CLI.
 // See README.md for usage, secret setup, and config format.
 
 import { WinstonDetector } from "./lib/detectors/winston.ts";
@@ -8,27 +8,36 @@ import { resolveOpenAiKey, resolveWinstonKey } from "./lib/secrets.ts";
 import { loadDefaults, loadStyleRules } from "./lib/config.ts";
 import { applyDeterministicStyleRules } from "./lib/style.ts";
 import { RunLogger } from "./lib/logger.ts";
-import { humanize } from "./lib/loop.ts";
+import { styleguard } from "./lib/loop.ts";
 
-const HELP = `humanize --mode polish|grounded --in <file> --out <file>
+const HELP = `styleguard --mode polish|grounded --in <file> --out <file>
 
 Detect-scores a draft against Winston AI, rewrites low-scoring sentences with
 gpt-6-astra, and enforces a deterministic personal style pass (no em/en-dash,
-contractions expanded, no stacked punctuation) before every score, looping
-until a human-likeness threshold is met or --max-iterations is exhausted.
-Always exits 0 on a completed run, even when the threshold is not met, and
-always returns the best-scoring text seen.
+contractions expanded, no stacked punctuation, no LLM involved in this pass)
+once before the first detection call and once more on the final chosen text,
+looping until a candidate clears BOTH the human-likeness threshold and the
+readability floor, or --max-iterations is exhausted. Winston is a single
+vendor's opinion, never the sole gate: a candidate that clears the
+readability floor is always preferred over one that scores higher on
+AI-detection alone but reads as harder to parse. Always exits 0 on a
+completed run, even when the threshold is not met, and always returns the
+best text seen.
 
 Flags:
   --mode <polish|grounded>   Required. "grounded" also requires --context.
-  --in <file>                Required. Input text file to humanize.
+  --in <file>                Required. Input text file to process.
   --out <file>                Required. Where the final text is written.
                               stdout/--out carry FINAL TEXT ONLY, never
                               score/JSON/diagnostics.
   --context <file>           Verified context packet (grounded mode only).
   --threshold <0-100>        Human-likeness score to stop at. Default: 90.
+  --readability-floor <0-100>
+                              Minimum Winston readability_score (Flesch-Kincaid
+                              reading ease, higher = easier) a candidate must
+                              clear to count as "good enough." Default: 50.
   --max-iterations <n>       Max detect/rewrite cycles. Default: 4.
-  --log-dir <dir>            Run log directory. Default: ~/.local/state/humanize
+  --log-dir <dir>            Run log directory. Default: ~/.local/state/styleguard
                               Only the log file *path* is printed, to stderr.
                               Never pipe the log itself back into an LLM/agent
                               context.
@@ -49,6 +58,7 @@ interface Args {
   out?: string;
   context?: string;
   threshold?: number;
+  readabilityFloor?: number;
   maxIterations?: number;
   logDir?: string;
   config?: string;
@@ -85,6 +95,9 @@ function parseArgs(argv: string[]): Args {
         break;
       case "--threshold":
         args.threshold = Number(next());
+        break;
+      case "--readability-floor":
+        args.readabilityFloor = Number(next());
         break;
       case "--max-iterations":
         args.maxIterations = Number(next());
@@ -172,12 +185,19 @@ async function main(): Promise<number> {
 
   const config = {
     threshold: args.threshold ?? defaults.threshold,
+    readabilityFloor: args.readabilityFloor ?? defaults.readabilityFloor,
     maxIterations: args.maxIterations ?? defaults.maxIterations,
   };
-  const logDir = args.logDir ?? `${process.env.HOME}/.local/state/humanize`;
+  const logDir = args.logDir ?? `${process.env.HOME}/.local/state/styleguard`;
 
   const logger = new RunLogger();
-  logger.log({ event: "run_started", mode: args.mode, threshold: config.threshold, maxIterations: config.maxIterations });
+  logger.log({
+    event: "run_started",
+    mode: args.mode,
+    threshold: config.threshold,
+    readabilityFloor: config.readabilityFloor,
+    maxIterations: config.maxIterations,
+  });
 
   // Winston's auto-detect language mode. No local language-detection
   // dependency is pulled in for this (no external deps allowed); Winston
@@ -205,7 +225,7 @@ async function main(): Promise<number> {
     const detector = new WinstonDetector(winstonKey);
     const rewriter = new OpenAiRewriter(openAiKey);
 
-    const result = await humanize({
+    const result = await styleguard({
       inputText,
       mode: args.mode,
       contextText,

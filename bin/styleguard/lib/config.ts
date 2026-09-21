@@ -1,9 +1,16 @@
-import type { HumanizeConfig } from "./types.ts";
+import type { StyleguardConfig } from "./types.ts";
 import type { StyleRulesConfig } from "./style.ts";
 
-export const DEFAULT_CONFIG: HumanizeConfig = {
+export const DEFAULT_CONFIG: StyleguardConfig = {
   threshold: 90,
   maxIterations: 4,
+  // Winston's readability_score is 0-100, Flesch-Kincaid reading ease,
+  // higher = easier to read. Winston's own docs mark 50 as the boundary
+  // between "fairly difficult" and "difficult" prose
+  // (https://help.gowinston.ai/understanding-winston-ai/how-do-we-interpret-the-results-from-an-ai-text-scan) —
+  // below it, text reads as dense; above it, normal blog/marketing prose
+  // stays plain-English without being forced to elementary-grade sentences.
+  readabilityFloor: 50,
 };
 
 /** Loads bundled lib/style-rules.json, optionally merged with a --config file override. */
@@ -31,7 +38,7 @@ export async function loadStyleRules(overridePath?: string): Promise<StyleRulesC
 }
 
 /** Merges an optional --config file's `defaults` block over DEFAULT_CONFIG. */
-export async function loadDefaults(overridePath?: string): Promise<HumanizeConfig> {
+export async function loadDefaults(overridePath?: string): Promise<StyleguardConfig> {
   if (!overridePath) {
     return { ...DEFAULT_CONFIG };
   }
@@ -39,6 +46,6 @@ export async function loadDefaults(overridePath?: string): Promise<HumanizeConfi
   if (!(await file.exists())) {
     throw new Error(`--config file not found: ${overridePath}`);
   }
-  const json = JSON.parse(await file.text()) as { defaults?: Partial<HumanizeConfig> };
+  const json = JSON.parse(await file.text()) as { defaults?: Partial<StyleguardConfig> };
   return { ...DEFAULT_CONFIG, ...(json.defaults ?? {}) };
 }
