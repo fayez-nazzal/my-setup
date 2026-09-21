@@ -1,8 +1,10 @@
 # Alacritty
 
 Terminal emulator used by `../i3/config` (`$mod+Return` →
-`../bin/alacritty-single`) and by `../bin/alacritty-single`'s tmux-backed
-single-window launcher.
+`../bin/alacritty`) and by `../bin/alacritty`'s tmux-backed single-window
+launcher, which also shadows the plain `alacritty` command on `$PATH` (see
+`../bin/README.md`) so every launch path — i3, rofi's `drun`, or a bare
+`alacritty` typed in a shell — stays a single window.
 
 ## Install
 

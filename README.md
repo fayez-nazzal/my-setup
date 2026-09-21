@@ -262,11 +262,13 @@ install commands and the values you need to adjust for your machine:
 - [`picom/README.md`](picom/README.md) — tearing-free compositor, tuned for
   an old Intel iGPU.
 - [`alacritty/README.md`](alacritty/README.md) — terminal emulator,
-  launched by `i3/config`'s `$mod+Return` via `bin/alacritty-single`.
+  launched by `i3/config`'s `$mod+Return` via `bin/alacritty`, which also
+  shadows the plain `alacritty` command on `$PATH` so every launch path
+  stays a single window.
 - [`pipewire/README.md`](pipewire/README.md) — optional: a specific USB
   headset's RNNoise filter and a Firefox ESR mic-routing quirk fix. Skip
   entirely without that hardware/browser.
-- [`bin/README.md`](bin/README.md) — `alacritty-single`, `audio-control`,
+- [`bin/README.md`](bin/README.md) — `alacritty`, `audio-control`,
   `noise-cancel`, symlinked onto `$PATH`; the zsh aliases that wrap them
   are only defined when the scripts are actually present.
 - [`i3/README.md`](i3/README.md) — required one-time edits (`xrandr`

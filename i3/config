@@ -173,7 +173,7 @@ bar {
 
 set $mod Mod1
 bindsym $mod+q kill
-bindsym $mod+Return exec --no-startup-id ~/.local/bin/alacritty-single
+bindsym $mod+Return exec --no-startup-id ~/.local/bin/alacritty
 bindsym $mod+d exec --no-startup-id rofi -show drun
 bindsym Mod4+space exec --no-startup-id rofi -show drun
 bindsym $mod+b exec --no-startup-id helium
