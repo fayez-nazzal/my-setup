@@ -186,14 +186,20 @@ EOF
   fi
 
   if command -v bun >/dev/null 2>&1; then
-    if ! command -v tmuxscope >/dev/null 2>&1; then
+    tmuxscope_dir="$HOME/repos/tools/tmuxscope"
+    if [ ! -d "$tmuxscope_dir" ]; then
       log "tmux: building tmuxscope (no published package — see tmux/README.md)"
       mkdir -p "$HOME/repos/tools"
-      if [ ! -d "$HOME/repos/tools/tmuxscope" ]; then
-        git clone --quiet https://github.com/<your-username>/tmuxscope.git "$HOME/repos/tools/tmuxscope"
-      fi
-      (cd "$HOME/repos/tools/tmuxscope" && bun install --silent && bun run build && bun link) \
+      git clone --quiet https://github.com/<your-username>/tmuxscope.git "$tmuxscope_dir" \
+        || warn "tmuxscope clone failed — see tmux/README.md"
+    fi
+    if [ -d "$tmuxscope_dir" ]; then
+      (cd "$tmuxscope_dir" && bun install --silent && bun run build && bun link) \
         || warn "tmuxscope build failed — see tmux/README.md"
+      if [ -x "$tmuxscope_dir/dist/tmuxscope" ]; then
+        mkdir -p "$HOME/.local/bin"
+        ln -sfn "$tmuxscope_dir/dist/tmuxscope" "$HOME/.local/bin/tmuxscope"
+      fi
     fi
   else
     note "tmuxscope needs Bun (not found) — install Bun, then re-run this script (see tmux/README.md)."
