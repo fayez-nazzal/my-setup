@@ -16,7 +16,7 @@ ln -sfn "$HOME/my-setup/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacr
 
 Requires:
 
-- `/usr/bin/zsh` (hardcoded as `terminal.shell.program`) — adjust if zsh
+- `/bin/zsh` (hardcoded as `terminal.shell.program`) — adjust if zsh
   lives elsewhere on your system (`command -v zsh`), or if you haven't
   switched to zsh yet (see [`../zsh`](../zsh)).
 - The **GeistMono Nerd Font** — see
