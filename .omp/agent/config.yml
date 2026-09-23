@@ -26,11 +26,10 @@ hideThinkingBlock: true
 steeringMode: all
 followUpMode: all
 modelRoles:
-  slow: anthropic/claude-opus-5:medium
+  slow: anthropic/claude-opus-5-5:medium
   writer: openai-api/gpt-6-astra:high
   smol: openai-codex/gpt-5.6-luna:medium
   web: web/perplexity
-  default: openai-codex/gpt-5.6-luna:medium
 retry:
   fallbackChains:
     web:
