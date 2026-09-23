@@ -32,16 +32,15 @@ Back up an existing `~/.tmux.conf` before creating the link.
 
 - **tmuxscope, built from its upstream repository (this repo's author's own
   separate tool):**
-  [https://github.com/<your-username>/tmuxscope](https://github.com/<your-username>/tmuxscope)
+  [https://github.com/fayez-nazzal/tmuxscope](https://github.com/fayez-nazzal/tmuxscope)
 
-  There's no published package — clone and build it with Bun. The default
-  `tmux/tmux-scopes.conf` ships with a single `repos = ~/repos` scope, which
-  already covers `~/repos/tools/tmuxscope` as a subdirectory, so no extra
-  scope entry is needed just to build it here:
+  `tmux/tmux-scopes.conf` includes `my-setup = ~/my-setup` for this repo
+  and `repos = ~/repos` for tools. That scope already covers
+  `~/repos/tools/tmuxscope`, so no extra entry is needed to build it here:
 
   ```sh
   mkdir -p "$HOME/repos/tools"
-  git clone https://github.com/<your-username>/tmuxscope.git "$HOME/repos/tools/tmuxscope"
+  git clone https://github.com/fayez-nazzal/tmuxscope.git "$HOME/repos/tools/tmuxscope"
   cd "$HOME/repos/tools/tmuxscope"
   bun install
   bun run build
@@ -51,9 +50,9 @@ Back up an existing `~/.tmux.conf` before creating the link.
   `bun link` (run inside the cloned repo) registers the package globally and
   symlinks its compiled binary onto `bun`'s global bin dir
   (`~/.bun/bin/tmuxscope`, already on `PATH` via `zsh/.config/zsh/rc.d/`) —
-  no separate install step needed. Verify with `tmuxscope --version`
-  (tested against 0.2.2, matching `package.json` at clone time). Requires
-  tmux ≥ 3.0, zsh, and Bun ≥ 1.2 (all satisfied by this repo's zsh setup).
+  no separate install step needed. Verify with `tmuxscope --version`; this
+  checkout is version `0.2.2`. It requires tmux ≥ 3.0, zsh, and Bun ≥ 1.2.
+  The bootstrap discovers existing Bun in `~/.bun/bin`; it does not install Bun.
 
   **Linux note:** the `0.2.2` release breaks routing on tmux builds that
   vis-escape control bytes in formatted command output (observed on
