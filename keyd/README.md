@@ -26,15 +26,45 @@ Two files, split by device:
 
 ## Install
 
+Debian 13+ provides `keyd` in apt:
+
 ```sh
 sudo apt install keyd
-sudo mkdir -p /etc/keyd
-sudo ln -sfn "$HOME/my-setup/keyd/default.conf" /etc/keyd/default.conf
-sudo ln -sfn "$HOME/my-setup/keyd/apple-magic-keyboard.conf" /etc/keyd/apple-magic-keyboard.conf
-sudo systemctl enable --now keyd
-sudo keyd reload   # after any future edit to either file
 ```
 
-If you don't use an Apple Magic Keyboard, skip that file entirely (or find
-your own keyboard's `vendor:product` id and adapt it) — `default.conf`
-alone still gives you the Caps Lock → F13 remap that `../i3/config` expects.
+Debian 12 (Bookworm) does not package `keyd`. Build a tagged stable release
+from the [upstream releases](https://github.com/rvaiya/keyd/releases), not
+the development branch:
+
+```sh
+sudo apt install build-essential git
+work=$(mktemp -d)
+git clone --depth 1 --branch v2.6.0 https://github.com/rvaiya/keyd.git "$work/keyd"
+make -C "$work/keyd"
+sudo make -C "$work/keyd" install
+rm -rf "$work"
+```
+
+
+The bootstrap performs this source build automatically on apt-based Linux
+systems when no `keyd` package is available. Then symlink the required
+default config and enable the service:
+
+```sh
+sudo mkdir -p /etc/keyd
+sudo ln -sfn "$HOME/my-setup/keyd/default.conf" /etc/keyd/default.conf
+sudo systemctl enable --now keyd
+sudo keyd reload   # after any future edit to the file
+```
+
+Back up any existing files in `/etc/keyd/` before creating these symlinks.
+Only if you use an Apple Magic Keyboard with vendor:product ID `05ac:029c`,
+also add:
+
+```sh
+sudo ln -sfn "$HOME/my-setup/keyd/apple-magic-keyboard.conf" /etc/keyd/apple-magic-keyboard.conf
+```
+
+If you don't use that exact keyboard, skip the Apple-specific file —
+`default.conf` alone still gives you the Caps Lock → F13 remap that
+`../i3/config` expects.

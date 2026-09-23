@@ -1,10 +1,9 @@
-# i3 config file (v4) — this machine's actual, in-use config (i3 4.24,
-# Debian). Mirrors .aerospace.toml's Alt-based ergonomics (see keyd/ for the
-# Mac-keyboard remap that makes this feel like AeroSpace on a Mac keyboard).
+# i3 config file (v4), portable with the per-host adaptations documented
+# below. Mirrors .aerospace.toml's Alt-based ergonomics; keyd supplies the
+# optional Mac-keyboard behavior.
 #
-# Machine-specific values that need adjusting on a different box (documented,
-# not hidden): the xrandr output names on line ~11, the wallpaper path, and
-# the workspace `assign` rules' window classes (confirm with `xprop`).
+# Machine-specific bits kept local to each host: wallpaper paths and
+# workspace assignments for the applications actually installed there.
 
 # Font for window titles and the bar. Requires the GeistMono Nerd Font — see
 # ../README.md for install instructions (not apt-packaged).
@@ -14,16 +13,14 @@ font pango:GeistMono Nerd Font Mono 9
 # under ~/.config/autostart/) using dex.
 exec --no-startup-id dex --autostart --environment i3
 
-# Output layout for this machine: external monitor primary, laptop panel
-# off. Adjust output names for your hardware (`xrandr --query`).
-exec --no-startup-id xrandr --output HDMI-1 --mode 1920x1080 --rate 60 --primary --output LVDS-1 --off
+# Leave display layout to the display manager; add host-specific xrandr
+# commands here only when a fixed multi-monitor arrangement is required.
 
-# Compositor: eliminates tearing on scroll/hover/animations. Tuned for
-# Intel HD Graphics 3000 in ../picom/picom.conf — retune for other GPUs.
+# Compositor: see the hardware-neutral baseline in ../picom/picom.conf.
 exec --no-startup-id picom --config ~/.config/picom/picom.conf
 
-# Desktop wallpaper.
-exec --no-startup-id feh --bg-fill ~/.config/i3/wallpaper/nature.jpg
+# Desktop wallpaper is optional; startup skips this command until the image exists.
+exec --no-startup-id sh -c 'if [ -f "$HOME/.config/i3/wallpaper/nature.jpg" ]; then exec feh --bg-fill "$HOME/.config/i3/wallpaper/nature.jpg"; fi'
 
 # xss-lock grabs a logind suspend inhibit lock and runs i3lock before
 # suspend; also usable directly via `loginctl lock-session`.

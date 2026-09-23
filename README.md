@@ -7,11 +7,10 @@ PipeWire). Everything is designed to be symlinked from `$HOME` (or, for
 `keyd`, from `/etc/keyd/`) and to degrade gracefully when an optional tool
 isn't installed — a missing binary is skipped, not a fatal error.
 
-The Linux side is one real machine's actual, in-daily-use config, not an
-abstracted template — same relationship `.aerospace.toml` already has to
-its own Mac. Machine-specific values (monitor names, a USB headset's ALSA
-node names, window classes) are called out inline and in each directory's
-README rather than hidden or faked.
+The Linux side is this setup's real desktop config, but its core defaults
+are portable — host-specific app classes, wallpaper paths, and headset
+device names are called out inline and in each directory's README rather
+than hidden or faked.
 
 Linux setups here assume `apt` (Debian/Ubuntu) and never require Homebrew —
 even on macOS, only zsh/tmux/git are ever assumed; everything else is
@@ -76,15 +75,18 @@ Full package list for the Linux desktop stack:
 ```sh
 sudo apt install i3 i3-wm i3lock i3status python3 dex feh picom rofi \
   xss-lock network-manager network-manager-gnome pulseaudio-utils \
-  keyd alacritty pipewire pipewire-audio-client-libraries wireplumber \
-  zsh git jq
+  alacritty pipewire pipewire-audio-client-libraries wireplumber \
+  zsh git jq tmux fd-find thefuck
 ```
 
-(`keyd` needs a `sudo systemctl enable --now keyd` after install — see
-[`keyd/README.md`](keyd/README.md). RNNoise noise cancellation needs a
-LADSPA plugin not in Debian's repos — see
+On Debian 13+, `keyd` is available with `sudo apt install keyd`; Debian 12
+must build the latest stable release from upstream (see
+[`keyd/README.md`](keyd/README.md)). The bootstrap installs its build
+prerequisites and builds it automatically when apt has no `keyd` package.
+(`keyd` needs `sudo systemctl enable --now keyd` after install.)
+RNNoise noise cancellation needs a LADSPA plugin not in Debian's repos — see
 [`pipewire/README.md`](pipewire/README.md); skip it if you don't have the
-same USB headset.)
+same USB headset.
 
 Everything else referenced below is optional — each integration checks
 `command -v` before doing anything, so an uninstalled tool is silently
@@ -96,7 +98,7 @@ Clone the repo, then either run the bootstrap script or symlink the
 pieces you want by hand.
 
 ```sh
-git clone git@github.com:<your-username>/my-setup.git "$HOME/my-setup"
+git clone git@github.com:fayez-nazzal/my-setup.git "$HOME/my-setup"
 "$HOME/my-setup/install.sh"
 ```
 
@@ -126,6 +128,10 @@ ln -sfn "$HOME/my-setup/zsh/.config/zsh" "$HOME/.config/zsh"
 
 Back up any existing `~/.zshenv`, `~/.zprofile`, `~/.zshrc`, or
 `~/.config/zsh` first.
+
+The bootstrap links zsh but does not change your account's login shell.
+On Linux, run `chsh -s "$(command -v zsh)"` and start a new login session
+if you want zsh as the default; the installer reports when it differs.
 
 Load order: `.zshenv` (every shell) → `.zprofile` (login shells, sources
 `profile.d/*.zsh` in filename order) → `.zshrc` (interactive shells, sources
@@ -160,7 +166,7 @@ Notes below.
 
 Recommended tools for the full experience: `starship`, `thefuck`, `fzf`,
 `fd`, `bat`, `eza`, `zoxide`, `zsh-abbr`, [`histago`](https://github.com),
-[`tmuxscope`](https://github.com/<your-username>/tmuxscope), `wt`, `nag`,
+[`tmuxscope`](https://github.com/fayez-nazzal/tmuxscope), `wt`, `nag`,
 Volta, pnpm. On Debian, most of these are `sudo apt install <name>` (`fd`
 is `fd-find`, `bat` may install as `batcat` — Debian's package renames it
 to avoid a clash with an unrelated `bat` package, and installing it that
@@ -261,8 +267,8 @@ install commands and the values you need to adjust for your machine:
   `sudo`) Mac-keyboard remap: Caps Lock → F13 (bound to `fullscreen toggle`
   in `i3/config`), plus Cmd-style copy/paste chords on an actual Apple
   keyboard.
-- [`picom/README.md`](picom/README.md) — tearing-free compositor, tuned for
-  an old Intel iGPU.
+- [`picom/README.md`](picom/README.md) — low-overhead compositor config
+  without GPU-specific driver flags.
 - [`alacritty/README.md`](alacritty/README.md) — terminal emulator,
   launched by `i3/config`'s `$mod+Return` via `bin/alacritty`, which also
   shadows the plain `alacritty` command on `$PATH` so every launch path
@@ -273,13 +279,12 @@ install commands and the values you need to adjust for your machine:
 - [`bin/README.md`](bin/README.md) — `alacritty`, `audio-control`,
   `noise-cancel`, symlinked onto `$PATH`; the zsh aliases that wrap them
   are only defined when the scripts are actually present.
-- [`i3/README.md`](i3/README.md) — required one-time edits (`xrandr`
-  output names, `assign` window classes, the GeistMono Nerd Font), and
-  where i3 can't replicate an AeroSpace behavior (mouse-follows-focus,
-  config auto-reload).
+- [`i3/README.md`](i3/README.md) — host-specific app window classes and
+  wallpaper, the GeistMono Nerd Font, and where i3 can't replicate an
+  AeroSpace behavior (mouse-follows-focus, config auto-reload).
 
-Select "i3" as the session in your display manager's login screen
-(`lightdm` here), replacing AeroSpace's `start-at-login`.
+Select "i3" from your display manager's session list after checking that
+your X11/display setup supports it; the installer does not change sessions.
 
 ### Oh My Pi (`omp`) agent
 
