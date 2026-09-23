@@ -26,7 +26,7 @@ hideThinkingBlock: true
 steeringMode: all
 followUpMode: all
 modelRoles:
-  slow: anthropic/claude-opus-5-5:medium
+  slow: anthropic-api/claude-opus-5:medium
   writer: openai-api/gpt-6-astra:high
   web: web/perplexity
   default: openai-codex/gpt-6-luna:max
@@ -44,3 +44,7 @@ retry:
   fallbackChains:
     web:
       - web/duckduckgo
+    slow:
+      - openai-codex/gpt-6-sol
+dev:
+  autoqaConsent: denied

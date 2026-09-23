@@ -1,17 +1,18 @@
 ---
 name: orchestrate-writer
-description: Use when a task needs polished writing from a stateless writer completion after the primary agent has gathered and verified repository context.
+description: Use when a bounded writing task benefits from one writer task-agent pass after the primary agent has gathered and verified repository context.
 hide: true
 disable-model-invocation: true
 ---
 
 # Orchestrate Writer
 
-Use the primary agent for repository access, implementation, decisions, and verification. Use one `writer` completion only for a bounded writing task after the primary agent has assembled a verified context packet.
+Use the primary agent for repository access, implementation, decisions, and verification. Use one `writer` task agent only for a bounded writing task after the primary agent has assembled a verified context packet.
 
 ## Capability boundary
 
-The `completion` API is stateless and has no repository tools. A `writer` completion can turn supplied evidence into a draft, rewrite, structured content, or patch proposal. It cannot read files, edit files, run commands, test code, commit, or push. The primary agent owns every tool action and every final claim.
+The `writer` agent receives only the supplied prompt and context and has no repository tools. Its `model: "@writer"` setting resolves through `modelRoles.writer` in `~/.omp/agent/config.yml`.
+Use OMP's `agent()` helper to dispatch this task agent. `completion()` accepts only the `"smol"`, `"default"`, or `"slow"` tiers; it cannot select the `writer` agent.
 
 Do not use this skill for trivial transformations, facts already established, or work the primary agent can finish directly.
 
@@ -38,22 +39,29 @@ Keep security decisions, destructive or irreversible operations, external side e
    - candidate files and symbols;
    - audience, acceptance criteria, and validation command;
    - required response format and tone.
-4. **Call `writer` once.** In an eval kernel:
+4. **Call `writer` once.** Its model resolves from the agent's `model` frontmatter and configured role mapping; do not assume a fixed provider/model. In an eval kernel:
 
    ```js
-   const handle = completion(`...verified context packet and bounded writing request...`, {
-     model: "writer",
-     system: "Use only the supplied evidence. Do not invent facts. Return the requested bounded result.",
+   const handle = await agent(`...verified context packet and bounded writing request...`, {
+     agent: "writer",
    });
    const result = await handle.wait();
+   display(result);
    ```
 
-   Python is equivalent: `completion(prompt, model="writer", system=...)`, followed by `handle.wait()`. Add a schema only when structured output materially improves reliability.
-5. **Run the personal style pass.** Write the `writer` draft to a file and shell out to `styleguard --mode polish --in <draft file> --out <styled file>` (see `bin/styleguard/README.md`) in the primary session. This detect-scores the draft against Winston AI, rewrites any low-scoring sentences with `gpt-6-astra`, and enforces the hard style rules (no em/en-dash, contractions expanded, no stacked punctuation) before you adjudicate anything. Use `<styled file>`'s contents for the next step. The run log (`--log-dir`) is for a human to `tail` manually — never read it into this conversation or treat it as content.
+   Python equivalent:
+
+   ```python
+   handle = await agent("...verified context packet and bounded writing request...", agent="writer")
+   result = await handle.wait()
+   display(result)
+   ```
+
+5. **Review style locally.** Do one concise editorial pass in the primary session against the requested voice and explicit style constraints. Do not run `styleguard`, invoke `completion()`, or make a second writer call for polishing. Keep the draft unchanged when it already meets the constraints.
 6. **Adjudicate the result.** Treat the response as a draft or proposal. Re-check every path, symbol, assumption, claim, and command against the repository. Resolve ambiguity from source, not intuition.
 7. **Act locally.** Apply the smallest correct change in the primary session. Never paste a proposed commit, push, or success claim without executing it.
 8. **Validate independently.** Run the narrow reproduction or acceptance command in the primary session, then the repository-required checks. The `writer` response is never validation evidence.
-9. **Report precisely.** State what `writer` contributed, what the primary agent changed, the styleguard result (score/iterations or skip reason), exact commands run, and their observed outcomes.
+9. **Report precisely.** State what `writer` contributed, what the primary agent changed, and the exact validation commands and observed outcomes. Mention any local editorial changes.
 
 ## Packet quality
 
@@ -75,13 +83,13 @@ If the packet is incomplete, research before calling. Repeated calls are not a s
 - **Missing evidence:** do not call; gather the missing file, symbol, command, or failure.
 - **Ambiguous response:** resolve the ambiguity from source, then make one corrected call only if a separate writing pass remains useful.
 - **Validation failure:** debug in the primary session first; call again only with the new evidence and a revised bounded question.
-- **Tool-dependent task:** use the primary agent or a persistent tool-capable task agent instead. A `writer` completion cannot operate tools.
-- **Completion failure:** diagnose the failure before retrying, and preserve the one-bounded-unit limit.
+- **Tool-dependent task:** use the primary agent or a persistent tool-capable task agent instead. The `writer` agent cannot operate tools.
+- **Writer-agent failure:** diagnose the failure before retrying, and preserve the one-bounded-unit limit.
 
 ## Cost and scope controls
 
-- Default to one `writer` call for one bounded writing unit.
-- Never fan out speculative completions.
-- Keep the context packet compact and evidence-first.
+- Default to one `writer` agent call for one bounded writing unit.
+- Never fan out speculative agent calls or run model-based style rewrites.
+- Keep the context packet compact and evidence-first to limit token use.
 - Do not delegate git side effects or final accountability.
 - Do not commit or push unless explicitly requested and local validation is green; verify remote results separately.
