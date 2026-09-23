@@ -11,6 +11,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
 BACKUP_DIR=""
 NEEDS_ATTENTION=()
 
@@ -104,6 +105,14 @@ install_zsh() {
     note "Your previous ~/.config/zsh was backed up to $backed_up — check it for anything else worth keeping."
   fi
   note "Review your backed-up .zshrc/.zshenv/.zprofile (if any) for custom lines worth keeping — add them under zsh/.config/zsh/rc.d/ or profile.d/, or zsh/.config/zsh/local.zsh for anything machine-local. Never put a secret in a tracked rc.d file."
+  if [ "$(uname -s)" = Linux ] && command -v getent >/dev/null 2>&1; then
+    login_user=${USER:-$(id -un)}
+    login_shell=$(getent passwd "$login_user" | cut -d: -f7)
+    zsh_path=$(command -v zsh || true)
+    if [ -n "$zsh_path" ] && [ "$login_shell" != "$zsh_path" ]; then
+      note "zsh config is linked, but the login shell is $login_shell — run 'chsh -s $zsh_path' to use it by default."
+    fi
+  fi
 }
 
 install_git() {
@@ -190,7 +199,7 @@ EOF
     if [ ! -d "$tmuxscope_dir" ]; then
       log "tmux: building tmuxscope (no published package — see tmux/README.md)"
       mkdir -p "$HOME/repos/tools"
-      git clone --quiet https://github.com/<your-username>/tmuxscope.git "$tmuxscope_dir" \
+      git clone --quiet https://github.com/fayez-nazzal/tmuxscope.git "$tmuxscope_dir" \
         || warn "tmuxscope clone failed — see tmux/README.md"
     fi
     if [ -d "$tmuxscope_dir" ]; then
@@ -198,7 +207,7 @@ EOF
         || warn "tmuxscope build failed — see tmux/README.md"
       if [ -x "$tmuxscope_dir/dist/tmuxscope" ]; then
         mkdir -p "$HOME/.local/bin"
-        ln -sfn "$tmuxscope_dir/dist/tmuxscope" "$HOME/.local/bin/tmuxscope"
+        link "$tmuxscope_dir/dist/tmuxscope" "$HOME/.local/bin/tmuxscope"
       fi
     fi
   else
@@ -258,7 +267,8 @@ install_bat_binary() {
   esac
   log "bat: installing upstream release binary (no sudo)"
   work=$(mktemp -d)
-  ver=$(curl -sSL https://api.github.com/repos/sharkdp/bat/releases/latest | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+  curl -sSL -o "$work/release.json" https://api.github.com/repos/sharkdp/bat/releases/latest
+  ver=$(sed -n '/"tag_name"/{s/.*"tag_name": *"\([^"]*\)".*/\1/p;q;}' "$work/release.json")
   if curl -sSL -o "$work/bat.tar.gz" "https://github.com/sharkdp/bat/releases/download/${ver}/bat-${ver}-${target}.tar.gz" \
     && tar xzf "$work/bat.tar.gz" -C "$work"; then
     cp "$work"/bat-*/bat "$HOME/.local/bin/bat"
@@ -278,7 +288,8 @@ install_eza_binary() {
   esac
   log "eza: installing upstream release binary (no sudo)"
   work=$(mktemp -d)
-  ver=$(curl -sSL https://api.github.com/repos/eza-community/eza/releases/latest | grep -m1 '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+  curl -sSL -o "$work/release.json" https://api.github.com/repos/eza-community/eza/releases/latest
+  ver=$(sed -n '/"tag_name"/{s/.*"tag_name": *"\([^"]*\)".*/\1/p;q;}' "$work/release.json")
   if curl -sSL -o "$work/eza.tar.gz" "https://github.com/eza-community/eza/releases/download/${ver}/eza_${target}.tar.gz" \
     && tar xzf "$work/eza.tar.gz" -C "$work"; then
     cp "$work/eza" "$HOME/.local/bin/eza"
@@ -314,17 +325,21 @@ install_recommended_tools() {
       git clone --quiet --depth 1 https://github.com/junegunn/fzf.git "$HOME/.fzf"
     fi
     "$HOME/.fzf/install" --bin --no-update-rc >/dev/null || warn "fzf install failed"
-    ln -sfn "$HOME/.fzf/bin/fzf" "$HOME/.local/bin/fzf"
+    link "$HOME/.fzf/bin/fzf" "$HOME/.local/bin/fzf"
   fi
 
   command -v bat >/dev/null 2>&1 || install_bat_binary
   command -v eza >/dev/null 2>&1 || install_eza_binary
 
-  if command -v apt-get >/dev/null 2>&1 && ! command -v fd >/dev/null 2>&1 && ! command -v fdfind >/dev/null 2>&1; then
-    note "fd not found — 'sudo apt install fd-find' (installs as fdfind; symlink ~/.local/bin/fd to it if you want the plain name)."
+  if ! command -v fd >/dev/null 2>&1; then
+    if command -v fdfind >/dev/null 2>&1; then
+      link "$(command -v fdfind)" "$HOME/.local/bin/fd"
+    else
+      note "fd not found — install 'fd-find' (Debian) or the equivalent for your distro."
+    fi
   fi
   if ! command -v thefuck >/dev/null 2>&1; then
-    note "thefuck not installed — needs 'sudo apt install thefuck' (or pipx), which this script won't run without your password."
+    note "thefuck not installed — install it with 'sudo apt install thefuck' (or pipx)."
   fi
 }
 
@@ -343,12 +358,16 @@ install_macos_desktop() {
   note ".aerospace.toml references machine-specific helper scripts under ~/.config/aerospace/*.sh (ghostty.sh, finder-single.sh, etc.) this repo doesn't ship, and app bundle IDs for one person's apps — adjust for yours (README.md's AeroSpace section)."
 }
 
-install_linux_desktop() {
-  log "Linux: i3 + keyd + picom + Alacritty + PipeWire"
-
+install_linux_packages() {
   pkgs="i3 i3-wm i3lock i3status python3 dex feh picom rofi xss-lock
-    network-manager network-manager-gnome pulseaudio-utils keyd alacritty
-    pipewire pipewire-audio-client-libraries wireplumber jq"
+    network-manager network-manager-gnome pulseaudio-utils alacritty
+    pipewire pipewire-audio-client-libraries wireplumber jq zsh git tmux fd-find thefuck"
+
+  if command -v apt-cache >/dev/null 2>&1 && apt-cache show keyd >/dev/null 2>&1; then
+    pkgs="$pkgs keyd"
+  else
+    pkgs="$pkgs build-essential"
+  fi
 
   if command -v apt-get >/dev/null 2>&1; then
     if sudo -n true 2>/dev/null; then
@@ -361,6 +380,97 @@ install_linux_desktop() {
   else
     note "No apt-get found — install for your distro: $(echo $pkgs)"
   fi
+}
+
+install_keyd_from_source() {
+  command -v keyd >/dev/null 2>&1 && return 0
+  command -v apt-get >/dev/null 2>&1 || return 0
+  if ! command -v apt-cache >/dev/null 2>&1; then
+    note "keyd is missing and apt-cache is unavailable — install keyd manually (keyd/README.md)."
+    return 0
+  fi
+  apt-cache show keyd >/dev/null 2>&1 && return 0
+  if ! sudo -n true 2>/dev/null; then
+    note "keyd isn't packaged for this Debian release and needs sudo to build from upstream source (keyd/README.md)."
+    return 0
+  fi
+  if ! command -v git >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1; then
+    note "keyd needs git and build-essential to build from upstream source (keyd/README.md)."
+    return 0
+  fi
+
+  log "keyd: Debian package unavailable; building the latest stable upstream release"
+  work=$(mktemp -d)
+  if ! curl -fsSL -o "$work/release.json" https://api.github.com/repos/rvaiya/keyd/releases/latest; then
+    note "keyd release lookup failed — install it manually from https://github.com/rvaiya/keyd/releases (keyd/README.md)."
+    rm -rf "$work"
+    return 0
+  fi
+  version=$(sed -n '/"tag_name"/{s/.*"tag_name": *"\([^"]*\)".*/\1/p;q;}' "$work/release.json")
+  if [ -z "$version" ]; then
+    note "keyd release lookup returned no stable tag — install it manually from https://github.com/rvaiya/keyd/releases (keyd/README.md)."
+    rm -rf "$work"
+    return 0
+  fi
+  if git clone --quiet --depth 1 --branch "$version" https://github.com/rvaiya/keyd.git "$work/keyd" \
+    && make -C "$work/keyd" \
+    && sudo make -C "$work/keyd" install; then
+    log "keyd: installed upstream stable release $version"
+  else
+    note "keyd source build/install failed — see the output above and keyd/README.md."
+  fi
+  rm -rf "$work"
+}
+
+install_nerd_font() {
+  command -v fc-match >/dev/null 2>&1 || {
+    note "fontconfig is unavailable — install the GeistMono Nerd Font manually (i3/README.md)."
+    return 0
+  }
+  fc-match -f '%{family}' "GeistMono Nerd Font Mono" | grep -q "GeistMono" && return 0
+
+  log "font: installing GeistMono Nerd Font for the i3/Alacritty configs"
+  work=$(mktemp -d)
+  if ! curl -fsSL -o "$work/release.json" https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest; then
+    note "Nerd Fonts release lookup failed — install GeistMono manually (i3/README.md)."
+    rm -rf "$work"
+    return 0
+  fi
+  version=$(sed -n '/"tag_name"/{s/.*"tag_name": *"\([^"]*\)".*/\1/p;q;}' "$work/release.json")
+  if [ -z "$version" ] || ! curl -fsSL -o "$work/GeistMono.tar.xz" \
+    "https://github.com/ryanoasis/nerd-fonts/releases/download/$version/GeistMono.tar.xz"; then
+    note "GeistMono Nerd Font download failed — install it manually (i3/README.md)."
+    rm -rf "$work"
+    return 0
+  fi
+
+  font_dir="$HOME/.local/share/fonts/GeistMono-$version"
+  mkdir -p "$font_dir"
+  if tar xJf "$work/GeistMono.tar.xz" -C "$font_dir" && fc-cache -f "$font_dir" \
+    && fc-match -f '%{family}' "GeistMono Nerd Font Mono" | grep -q "GeistMono"; then
+    log "font: GeistMono Nerd Font is ready"
+  else
+    note "GeistMono Nerd Font install failed — install it manually (i3/README.md)."
+  fi
+  rm -rf "$work"
+}
+
+link_system_config() {
+  src=$1
+  dst=$2
+  if sudo test -L "$dst" && [ "$(sudo readlink "$dst")" = "$src" ]; then
+    return 0
+  fi
+  if sudo test -e "$dst" || sudo test -L "$dst"; then
+    note "Left existing $dst untouched; back it up before replacing it with a symlink to $src."
+    return 0
+  fi
+  sudo ln -s "$src" "$dst"
+  log "linked $dst -> $src"
+}
+
+install_linux_desktop() {
+  log "Linux: i3 + keyd + picom + Alacritty + PipeWire"
 
   mkdir -p "$HOME/.config/i3" "$HOME/.config/i3status" "$HOME/.config/picom" "$HOME/.config/alacritty" "$HOME/.local/bin"
   link "$REPO_DIR/i3/config" "$HOME/.config/i3/config"
@@ -370,25 +480,44 @@ install_linux_desktop() {
   for f in alacritty audio-control noise-cancel; do
     link "$REPO_DIR/bin/$f" "$HOME/.local/bin/$f"
   done
+  install_nerd_font
 
-  if sudo -n true 2>/dev/null; then
+  install_keyd_from_source
+  if command -v keyd >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
     log "keyd: installing system-wide config (needs sudo)"
     sudo mkdir -p /etc/keyd
-    sudo ln -sfn "$REPO_DIR/keyd/default.conf" /etc/keyd/default.conf
-    sudo ln -sfn "$REPO_DIR/keyd/apple-magic-keyboard.conf" /etc/keyd/apple-magic-keyboard.conf
-    sudo systemctl enable --now keyd 2>/dev/null || warn "keyd: couldn't enable the service — check 'systemctl status keyd'"
+    link_system_config "$REPO_DIR/keyd/default.conf" /etc/keyd/default.conf
+    if [ -r /proc/bus/input/devices ] && grep -q 'Vendor=05ac Product=029c' /proc/bus/input/devices; then
+      link_system_config "$REPO_DIR/keyd/apple-magic-keyboard.conf" /etc/keyd/apple-magic-keyboard.conf
+    elif [ -r /proc/bus/input/devices ] && sudo test -L /etc/keyd/apple-magic-keyboard.conf \
+      && [ "$(sudo readlink /etc/keyd/apple-magic-keyboard.conf)" = "$REPO_DIR/keyd/apple-magic-keyboard.conf" ]; then
+      sudo rm -f /etc/keyd/apple-magic-keyboard.conf
+      log "keyd: removed unused Apple Magic Keyboard config symlink"
+    fi
+    sudo systemctl enable --now keyd 2>/dev/null || note "keyd couldn't be enabled — check 'systemctl status keyd' and keyd/README.md."
+  elif ! command -v keyd >/dev/null 2>&1; then
+    note "keyd isn't installed; see keyd/README.md."
   else
-    note "keyd needs root — run the sudo ln/systemctl commands in keyd/README.md yourself."
+    note "keyd needs root — run the system-link/service commands in keyd/README.md yourself."
   fi
 
-  note "i3/config bakes in this machine's real xrandr output names and app window-class assign rules — edit them for your hardware/apps (i3/README.md)."
+  note "i3/config has app-specific window-class assignments and launch shortcuts — adjust them for apps you use (i3/README.md)."
+  if [ ! -f "$HOME/.config/i3/wallpaper/nature.jpg" ]; then
+    note "No i3 wallpaper at $HOME/.config/i3/wallpaper/nature.jpg — add your own image or change the feh path (i3/README.md)."
+  fi
+
   note "keyd/apple-magic-keyboard.conf only matters if you have that exact keyboard (keyd/README.md)."
   note "pipewire/ (RNNoise filter + Firefox mic routing) is optional, hardware/browser-specific, and not installed by this script — see pipewire/README.md before adopting it."
 }
 
+
 # ---------------------------------------------------------------------------
 main() {
   log "Bootstrapping from $REPO_DIR"
+  if [ "$(uname -s)" = Linux ]; then
+    install_linux_packages
+  fi
+
 
   install_zsh
   install_git
