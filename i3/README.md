@@ -1,13 +1,10 @@
 # i3 setup (Linux/Debian)
 
-This is the actual, in-daily-use i3 config for this machine — the Linux
-counterpart to [`../.aerospace.toml`](../.aerospace.toml). It shares
-AeroSpace's Alt-based modifier and the "feels like a Mac" ergonomics via
-[`../keyd/`](../keyd/README.md) (Cmd-style Insert/Delete chords, Caps Lock →
-F13 → fullscreen). It is a specific person's config, not a generic
-template — machine-specific bits (monitor names, wallpaper, `assign` window
-classes, app launch shortcuts) are called out below and inline in `config`,
-same as `.aerospace.toml` does for its own bundle IDs and helper scripts.
+This is the Linux counterpart to [`../.aerospace.toml`](../.aerospace.toml).
+It shares AeroSpace's Alt-based ergonomics and the "feels like a Mac"
+keyboard behavior via [`../keyd/`](../keyd/README.md). Display output
+layouts are left to the display manager; wallpaper paths, app classes, and
+launch shortcuts remain machine-specific and are called out below.
 
 No Homebrew involved — everything below is `apt`, a `.deb`, or a plain
 binary/script.
@@ -30,24 +27,25 @@ of them. Back up any existing `~/.config/i3/config` first, and drop your own
 wallpaper at `~/.config/i3/wallpaper/` (not tracked here; `config`'s `feh`
 line expects `nature.jpg` — point it at your own file).
 
-Select "i3" as the session in your display manager's login screen (this
-machine uses `lightdm`), replacing AeroSpace's `start-at-login`.
+Select "i3" from your display manager's session list after checking that
+your X11/display setup supports it; the bootstrap does not change sessions.
 
 ### The GeistMono Nerd Font
 
 `config`, the `i3status` bar, and `alacritty.toml` all set
-`GeistMono Nerd Font Mono`. It isn't in Debian's repos — install via
-[`getnf`](https://github.com/getnf/getnf) or manually from the
+`GeistMono Nerd Font Mono`. It isn't in Debian's repos. The bootstrap
+installs the latest Nerd Fonts release per-user when the font is missing;
+manual installation is also available through
+[`getnf`](https://github.com/getnf/getnf) or the
 [Nerd Fonts releases](https://github.com/ryanoasis/nerd-fonts/releases)
 (`GeistMono.zip`, extracted into `~/.local/share/fonts`, then
 `fc-cache -f`).
 
-## Required one-time edits
+## Machine-specific settings
 
-- **Monitor output names** (`config`'s `exec ... xrandr --output HDMI-1 ...
-  --output LVDS-1 --off` line): find yours with `xrandr --query` and
-  replace `HDMI-1`/`LVDS-1`. Single-monitor machines can drop the whole
-  `exec` line.
+- **Wallpaper**: add your own image at
+  `~/.config/i3/wallpaper/nature.jpg` or change the `feh` path in `config`.
+  Startup skips wallpaper setup until that file exists.
 - **`assign` window classes** (`Alacritty`, `Helium`, `dev.zed.Zed`,
   `obsidian`, `com.onepassword.OnePassword`): confirm with `xprop | grep
   WM_CLASS` (click the target window) and adjust for what you actually run.
