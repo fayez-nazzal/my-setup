@@ -2,8 +2,8 @@
 
 This is the GNOME counterpart to [`../i3/config`](../i3/config). It keeps the
 same Option/Alt workspace habits, Apple Command application shortcuts through
-[`../keyd/`](../keyd/), rofi as the Raycast replacement, Alacritty as the
-terminal, and Caps Lock as the fullscreen toggle.
+[`../keyd/`](../keyd/), Vicinae as a Raycast-style app launcher with clipboard
+history, Alacritty as the terminal, and Caps Lock as the fullscreen toggle.
 
 ## What is configured
 
@@ -15,13 +15,13 @@ terminal, and Caps Lock as the fullscreen toggle.
 - `Alt+1` through `Alt+9`, `Alt+0`, `Alt+G`, and `Alt+P` workspace switching.
 - `Alt+Shift` versions of those bindings to move the focused window.
 - `Caps Lock` → `F13` through keyd → GNOME fullscreen toggle.
-- `Command+Space` → `Super+Space` through keyd → rofi `drun`.
-- `Alt+D` → rofi `drun`.
+- `Command+Space` → `Super+Space` through keyd → Vicinae's launcher, for
+  searching apps and opening clipboard history.
+- `Alt+D` → rofi `drun` as a lightweight app-launcher fallback.
 - `Alt+Enter` → the repository's Alacritty wrapper, using its persistent
   tmux `main` session. Because GNOME has no i3 socket, each invocation can
-  open a separate Alacritty window. `xdg-terminals.list` also makes
-  `Alacritty.desktop` the GNOME default terminal for applications that use
-  `xdg-terminal-exec`.
+  open a separate Alacritty window. GNOME's terminal setting delegates to
+  `xdg-terminal-exec`, and `xdg-terminals.list` selects `Alacritty.desktop`.
 - `Alt+Shift+Insert` → lock screen.
 - GeistMono Nerd Font Mono as GNOME's monospace font and Alacritty's terminal
   font through the existing [`../alacritty/alacritty.toml`](../alacritty/alacritty.toml).
@@ -47,6 +47,15 @@ ln -sfn "$HOME/my-setup/gnome/apply.sh" \
 ```
 
 It then runs `my-setup-gnome` when a usable GNOME dconf session is available.
+
+Vicinae is required for the GNOME `Command+Space` launcher and clipboard
+history. Install it using the [official Linux instructions](https://docs.vicinae.com/install/linux).
+For GNOME clipboard monitoring, install and enable the [Vicinae GNOME
+extension](https://github.com/vicinaehq/gnome-extension) by following the
+[GNOME quickstart](https://docs.vicinae.com/quickstart/gnome). Start its
+background service at login with `systemctl --user enable --now vicinae.service`.
+The bootstrap does not install Vicinae or its GNOME extension.
+
 The dconf database is not itself symlinkable; the tracked `dconf.ini` remains
 the source of truth. After editing the repository file, apply the change with:
 

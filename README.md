@@ -3,8 +3,8 @@
 Personal dotfiles for zsh, tmux, tiling window managers, git, and
 [Oh My Pi](https://github.com) (`omp`) agent configuration — cross-platform
 between macOS (AeroSpace) and Linux (i3 or GNOME + keyd + picom + Alacritty +
-PipeWire). Everything is designed to be symlinked from `$HOME` (or, for
-`keyd`, from `/etc/keyd/`) and to degrade gracefully when an optional tool
+Vicinae + PipeWire). Everything is designed to be symlinked from `$HOME` (or,
+for `keyd`, from `/etc/keyd/`) and to degrade gracefully when an optional tool
 isn't installed — a missing binary is skipped, not a fatal error.
 
 The Linux side is this setup's real desktop config, but its core defaults
@@ -163,6 +163,9 @@ alias, `ffn`/`ffc` find helpers, `omp`/power/audio-helper aliases (each
 guarded to the tool that backs it), a `histago`+`fzf` `Ctrl-R` history
 search, zsh completion (`compinit -C`), and `zoxide` (aliases `cd` to `z`
 when present).
+`ffn`/`ffc` search below the current directory: `ffn` matches filenames;
+`ffc` searches file contents using ripgrep when available and `grep`
+otherwise.
 
 Machine-local overrides that shouldn't be tracked go in
 `~/.config/zsh/local.zsh` (auto-sourced last, git-ignored by
@@ -279,14 +282,14 @@ install commands and the values you need to adjust for your machine:
 
 - [`keyd/README.md`](keyd/README.md) — system-wide (`/etc/keyd/`, needs
   `sudo`) Mac-keyboard remap: Option/Alt stays the i3 leader, Command behaves
-  like Ctrl for application shortcuts, Command+Space opens rofi, and Caps
-  Lock → F13 toggles `fullscreen` in `i3/config`.
+  like Ctrl for application shortcuts, and Command+Space maps to Super+Space
+  (rofi in i3, Vicinae in GNOME); Caps Lock → F13 toggles fullscreen in i3.
 - [`picom/README.md`](picom/README.md) — low-overhead compositor config
   without GPU-specific driver flags.
 - [`alacritty/README.md`](alacritty/README.md) — terminal emulator,
-  launched by `i3/config`'s `$mod+Return` via `bin/alacritty`, which also
-  shadows the plain `alacritty` command on `$PATH` so every launch path
-  stays a single window.
+  launched by `i3/config`'s `$mod+Return` via `bin/alacritty`, which shadows
+  the plain `alacritty` command on `$PATH`; explicit terminal-command launches
+  pass through to preserve `xdg-terminal-exec` behavior.
 - [`pipewire/README.md`](pipewire/README.md) — optional: a specific USB
   headset's RNNoise filter and a Firefox ESR mic-routing quirk fix. Skip
   entirely without that hardware/browser.
@@ -297,8 +300,8 @@ install commands and the values you need to adjust for your machine:
   config, including host-specific app classes, wallpaper, the GeistMono Nerd
   Font, and the differences i3 cannot replicate.
 - [`gnome/README.md`](gnome/README.md) — the GNOME companion config with
-  fixed named workspaces, matching Alt/Option workspace chords, rofi,
-  Alacritty, keyd/Caps Lock behavior, and the declarative dconf sync workflow.
+  fixed named workspaces, matching Alt/Option workspace chords, Vicinae
+  app search and clipboard history, Alacritty, and keyd/Caps Lock behavior.
 
 Select either "i3" or the normal GNOME session from your display manager.
 The installer does not switch sessions. GNOME settings are applied when the

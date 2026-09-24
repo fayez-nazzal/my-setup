@@ -538,6 +538,19 @@ install_gnome_desktop() {
   else
     note "GNOME settings are linked but not applied — run my-setup-gnome inside a GNOME session."
   fi
+  if ! command -v vicinae >/dev/null 2>&1; then
+    note "Vicinae isn't installed — install it from https://docs.vicinae.com/install/linux; the GNOME Command+Space launcher and clipboard history need it."
+  fi
+  if [[ "${XDG_CURRENT_DESKTOP:-}" == *GNOME* ]]; then
+    if command -v gnome-extensions >/dev/null 2>&1; then
+      enabled_extensions=$(gnome-extensions list --enabled 2>/dev/null || true)
+      if [[ " ${enabled_extensions//$'\n'/ } " != *" vicinae@dagimg-dot "* ]]; then
+        note "Vicinae's GNOME extension is not enabled — install and enable it from https://docs.vicinae.com/quickstart/gnome for clipboard history."
+      fi
+    else
+      note "Install and enable Vicinae's GNOME extension from https://docs.vicinae.com/quickstart/gnome for clipboard history."
+    fi
+  fi
 }
 
 

@@ -3,8 +3,9 @@
 Terminal emulator used by `../i3/config` (`$mod+Return` →
 `../bin/alacritty`) and by `../bin/alacritty`'s tmux-backed single-window
 launcher, which also shadows the plain `alacritty` command on `$PATH` (see
-`../bin/README.md`) so every launch path — i3, rofi's `drun`, or a bare
-`alacritty` typed in a shell — stays a single window.
+`../bin/README.md`). Ordinary launches through i3, rofi `drun`, or a bare
+`alacritty` typed in a shell stay in the shared tmux session; explicit
+`-e`/`--command` launches pass through for terminal commands from GNOME.
 
 ## Install
 
