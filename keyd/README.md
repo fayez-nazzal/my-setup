@@ -10,27 +10,32 @@ root-run system service and only reads `/etc/keyd/*.conf`. (If you find a
 stray `~/.config/keyd/` on a machine, it's not read by anything; delete it
 to avoid confusion.)
 
-Two files, split by device:
-
 - `default.conf` — every keyboard *except* the Apple Magic Keyboard.
-  Currently just remaps Caps Lock to `F13` (bound to `fullscreen toggle` in
+  It remaps Caps Lock to `F13` (bound to `fullscreen toggle` in
   `../i3/config`) so Caps Lock stops being a lock key.
-- `apple-magic-keyboard.conf` — scoped to `[ids] 05ac:029c` (the exact
-  USB/Bluetooth vendor:product ID of an Apple Magic Keyboard; find yours
-  with `sudo libinput list-devices` or `cat /proc/bus/input/devices`).
-  Remaps left/right Cmd into a `command` layer that emits Ctrl-based
-  Insert/Delete chords for copy/paste/cut (`../alacritty/alacritty.toml`
-  turns those into `Copy`/`Paste` actions — plain `Ctrl+C` in a terminal
-  still sends `SIGINT`), plus the same Caps Lock → F13 remap and an ISO
-  extra-key fix.
+- `apple-magic-keyboard.conf` — scoped to both Apple Magic Keyboard IDs:
+  Bluetooth `004c:029c` and USB `05ac:029c`. Find the ID for a connected
+  keyboard with `sudo keyd.rvaiya monitor` on Ubuntu/Debian packages, or
+  `sudo keyd monitor` for an upstream install, or inspect
+  `/proc/bus/input/devices`.
+  It remaps left/right Cmd into a `command` layer that behaves like Ctrl for
+  normal application shortcuts, sends distinct Insert/Delete chords for
+  terminal copy/paste/cut (`../alacritty/alacritty.toml` turns those into
+  `Copy`/`Paste` actions), and maps Command+Space to Super+Space for the
+  rofi launcher. Plain Ctrl+C in a terminal still sends `SIGINT`. The same
+  Caps Lock → F13 remap and ISO extra-key fix apply.
 
 ## Install
 
-Debian 13+ provides `keyd` in apt:
+Debian 13+ and current Ubuntu releases provide `keyd` in apt:
 
 ```sh
 sudo apt install keyd
 ```
+
+The Ubuntu/Debian package names the executable `keyd.rvaiya` to avoid a
+name collision; the systemd service is still named `keyd`. Upstream builds
+use the executable name `keyd`.
 
 Debian 12 (Bookworm) does not package `keyd`. Build a tagged stable release
 from the [upstream releases](https://github.com/rvaiya/keyd/releases), not
@@ -54,17 +59,17 @@ default config and enable the service:
 sudo mkdir -p /etc/keyd
 sudo ln -sfn "$HOME/my-setup/keyd/default.conf" /etc/keyd/default.conf
 sudo systemctl enable --now keyd
-sudo keyd reload   # after any future edit to the file
+sudo keyd.rvaiya reload  # Ubuntu/Debian package; use `sudo keyd reload` for upstream builds
 ```
 
 Back up any existing files in `/etc/keyd/` before creating these symlinks.
-Only if you use an Apple Magic Keyboard with vendor:product ID `05ac:029c`,
-also add:
+If a connected Apple Magic Keyboard reports either supported ID
+(`004c:029c` over Bluetooth or `05ac:029c` over USB), also add:
 
 ```sh
 sudo ln -sfn "$HOME/my-setup/keyd/apple-magic-keyboard.conf" /etc/keyd/apple-magic-keyboard.conf
 ```
 
-If you don't use that exact keyboard, skip the Apple-specific file —
-`default.conf` alone still gives you the Caps Lock → F13 remap that
-`../i3/config` expects.
+If you do not use an Apple Magic Keyboard, skip the Apple-specific file —
+`default.conf` alone still gives every other keyboard the Caps Lock → F13
+remap that `../i3/config` expects.

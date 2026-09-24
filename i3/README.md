@@ -1,10 +1,12 @@
 # i3 setup (Linux/Debian)
 
 This is the Linux counterpart to [`../.aerospace.toml`](../.aerospace.toml).
-It shares AeroSpace's Alt-based ergonomics and the "feels like a Mac"
-keyboard behavior via [`../keyd/`](../keyd/README.md). Display output
-layouts are left to the display manager; wallpaper paths, app classes, and
-launch shortcuts remain machine-specific and are called out below.
+It keeps AeroSpace's **Option/Alt leader** and the same focus, move, split,
+workspace, resize, and reload chords. [`../keyd/`](../keyd/) maps an Apple
+Magic Keyboard's Command key to Ctrl for application shortcuts, maps
+Command+Space to the rofi launcher, and maps Caps Lock to F13. Therefore
+Caps Lock alone toggles fullscreen; there is no `$mod+f` fullscreen chord.
+Display output layouts are left to the display manager.
 
 No Homebrew involved — everything below is `apt`, a `.deb`, or a plain
 binary/script.
@@ -41,23 +43,30 @@ manual installation is also available through
 (`GeistMono.zip`, extracted into `~/.local/share/fonts`, then
 `fc-cache -f`).
 
+Caution: the `config` file uses the font only when it is installed; i3 and
+Alacritty still start with a fallback font if this optional download fails.
+
 ## Machine-specific settings
 
 - **Wallpaper**: add your own image at
   `~/.config/i3/wallpaper/nature.jpg` or change the `feh` path in `config`.
   Startup skips wallpaper setup until that file exists.
-- **`assign` window classes** (`Alacritty`, `Helium`, `dev.zed.Zed`,
-  `obsidian`, `com.onepassword.OnePassword`): confirm with `xprop | grep
-  WM_CLASS` (click the target window) and adjust for what you actually run.
-  `Helium` here is this machine's default browser (see
-  `~/.config/mimeapps.list`); swap in `Chrome`/`Chromium`/whatever you use.
+- **`assign` window classes**: `config` includes common Linux classes for
+  Chrome/Chromium/Firefox, Zed, Cursor, Teams, Obsidian, 1Password, and
+  XMind. Confirm a new app with `xprop | grep WM_CLASS` and adjust its
+  assignment if needed. macOS-only Safari has a matching workspace label but
+  no Linux window class.
+- **Keyboard contract**: Option/Alt is the i3 leader, matching the Mac
+  AeroSpace file. Command remains the application shortcut key through
+  keyd; Command+Space opens rofi, and Caps Lock toggles fullscreen.
 
 ## Recommended packages (already used by `config`, optional at the config-load level)
 
 - `rofi` — app launcher (`$mod+d`, also `Mod4+space`).
 - `picom` — compositor; see [`../picom/README.md`](../picom/README.md).
 - `feh` — wallpaper.
-- `xss-lock` + `i3lock` — idle-lock integration ($mod+Shift+x locks directly).
+- `xss-lock` + `i3lock` — idle-lock integration (`$mod+Shift+Insert` locks
+  directly).
 - `network-manager-gnome` — provides `nm-applet` for the tray icon (`config`
   execs it unconditionally; harmless if absent, just no tray icon — there's
   no systray `bar` block here to dock it in anyway).

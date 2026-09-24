@@ -1,8 +1,8 @@
 # my-setup
 
-Personal dotfiles for zsh, tmux, a tiling window manager, git, and
+Personal dotfiles for zsh, tmux, tiling window managers, git, and
 [Oh My Pi](https://github.com) (`omp`) agent configuration — cross-platform
-between macOS (AeroSpace) and Linux/Debian (i3 + keyd + picom + Alacritty +
+between macOS (AeroSpace) and Linux (i3 or GNOME + keyd + picom + Alacritty +
 PipeWire). Everything is designed to be symlinked from `$HOME` (or, for
 `keyd`, from `/etc/keyd/`) and to degrade gracefully when an optional tool
 isn't installed — a missing binary is skipped, not a fatal error.
@@ -27,6 +27,11 @@ optional and checked with `command -v` before use.
 │   ├── config            i3 config (Linux/Debian)
 │   ├── i3status/status.py  Custom Python i3bar status line
 │   └── README.md          Install, required edits, package list
+├── gnome/
+│   ├── dconf.ini          Declarative GNOME workspaces/keybindings
+│   ├── apply.sh           Apply/dump GNOME settings
+│   ├── xdg-terminals.list GNOME default-terminal selection
+│   └── README.md          GNOME parity and sync workflow
 ├── keyd/                 System-wide (/etc/keyd/) Mac-keyboard remap
 ├── picom/                Compositor config, tuned for old Intel iGPUs
 ├── alacritty/            Terminal emulator config
@@ -80,11 +85,11 @@ sudo apt install i3 i3-wm i3lock i3status python3 dex feh picom rofi \
   zsh git jq tmux fd-find thefuck
 ```
 
-On Debian 13+, `keyd` is available with `sudo apt install keyd`; Debian 12
-must build the latest stable release from upstream (see
-[`keyd/README.md`](keyd/README.md)). The bootstrap installs its build
-prerequisites and builds it automatically when apt has no `keyd` package.
-(`keyd` needs `sudo systemctl enable --now keyd` after install.)
+On Debian 13+ and Ubuntu releases that package it, `keyd` is available with
+`sudo apt install keyd`; older Debian/Ubuntu releases must build the latest
+stable release from upstream (see [`keyd/README.md`](keyd/README.md)). The
+bootstrap installs its build prerequisites and builds it automatically when
+apt has no `keyd` package.
 RNNoise noise cancellation needs a LADSPA plugin not in Debian's repos — see
 [`pipewire/README.md`](pipewire/README.md); skip it if you don't have the
 same USB headset.
@@ -258,7 +263,7 @@ Use Raycast for the shortcut: AeroSpace stops intercepting keys when disabled,
 so an AeroSpace binding cannot re-enable it. Disabling AeroSpace also moves
 windows from hidden AeroSpace workspaces into the visible area.
 
-#### Linux/Debian: i3 + keyd + picom + Alacritty + PipeWire
+#### Linux/Debian: i3 or GNOME + keyd + picom + Alacritty + PipeWire
 
 ```sh
 sudo apt install i3 i3-wm i3lock i3status python3 dex feh picom rofi \
@@ -273,9 +278,9 @@ Then set up each companion piece — every one has its own README with
 install commands and the values you need to adjust for your machine:
 
 - [`keyd/README.md`](keyd/README.md) — system-wide (`/etc/keyd/`, needs
-  `sudo`) Mac-keyboard remap: Caps Lock → F13 (bound to `fullscreen toggle`
-  in `i3/config`), plus Cmd-style copy/paste chords on an actual Apple
-  keyboard.
+  `sudo`) Mac-keyboard remap: Option/Alt stays the i3 leader, Command behaves
+  like Ctrl for application shortcuts, Command+Space opens rofi, and Caps
+  Lock → F13 toggles `fullscreen` in `i3/config`.
 - [`picom/README.md`](picom/README.md) — low-overhead compositor config
   without GPU-specific driver flags.
 - [`alacritty/README.md`](alacritty/README.md) — terminal emulator,
@@ -288,12 +293,17 @@ install commands and the values you need to adjust for your machine:
 - [`bin/README.md`](bin/README.md) — `alacritty`, `audio-control`,
   `noise-cancel`, symlinked onto `$PATH`; the zsh aliases that wrap them
   are only defined when the scripts are actually present.
-- [`i3/README.md`](i3/README.md) — host-specific app window classes and
-  wallpaper, the GeistMono Nerd Font, and where i3 can't replicate an
-  AeroSpace behavior (mouse-follows-focus, config auto-reload).
+- [`i3/README.md`](i3/README.md) — the AeroSpace-parity X11 window-manager
+  config, including host-specific app classes, wallpaper, the GeistMono Nerd
+  Font, and the differences i3 cannot replicate.
+- [`gnome/README.md`](gnome/README.md) — the GNOME companion config with
+  fixed named workspaces, matching Alt/Option workspace chords, rofi,
+  Alacritty, keyd/Caps Lock behavior, and the declarative dconf sync workflow.
 
-Select "i3" from your display manager's session list after checking that
-your X11/display setup supports it; the installer does not change sessions.
+Select either "i3" or the normal GNOME session from your display manager.
+The installer does not switch sessions. GNOME settings are applied when the
+installer runs inside a GNOME dconf session; otherwise run
+`~/.local/bin/my-setup-gnome` after logging into GNOME.
 
 ### Oh My Pi (`omp`) agent
 
