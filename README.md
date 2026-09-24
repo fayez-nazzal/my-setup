@@ -32,6 +32,7 @@ optional and checked with `command -v` before use.
 ├── alacritty/            Terminal emulator config
 ├── pipewire/             Headset RNNoise filter + Firefox mic routing
 ├── bin/                  Scripts symlinked onto $PATH (~/.local/bin)
+├── raycast/              Raycast Script Command for AeroSpace pause/resume
 ├── .tmux.conf           Portable tmux config (see tmux/README.md for setup)
 ├── tmux/
 │   ├── README.md        tmux-specific install/plugin instructions
@@ -248,6 +249,14 @@ name. It does reference machine-specific helper scripts under
 a handful of app bundle IDs (Ghostty, Chrome, Slack, Obsidian, 1Password,
 etc.) — adjust `on-window-detected` rules for the apps installed on your
 machine. Reload with `alt-shift-e` after editing.
+
+`raycast/toggle-aerospace.sh` calls `aerospace enable toggle`. Add
+`$HOME/my-setup/raycast` in Raycast under **Settings → Script Commands → Add
+Script Directory**. Then find **Toggle AeroSpace** in Root Search, press `⌘K`,
+choose **Configure Command → Record Hotkey**, and assign one global shortcut.
+Use Raycast for the shortcut: AeroSpace stops intercepting keys when disabled,
+so an AeroSpace binding cannot re-enable it. Disabling AeroSpace also moves
+windows from hidden AeroSpace workspaces into the visible area.
 
 #### Linux/Debian: i3 + keyd + picom + Alacritty + PipeWire
 
