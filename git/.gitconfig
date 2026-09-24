@@ -43,3 +43,6 @@
 	co = checkout
 	br = branch
 	lg = log --graph --oneline --decorate
+[user]
+	name = Fayez Nazzal
+	email = dev@fayez.io
