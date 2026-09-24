@@ -5,8 +5,11 @@ ffn() {
 }
 
 ffc() {
-  command -v rg >/dev/null 2>&1 || return 127
-  rg -i -l -F --hidden --glob '!.git' "$1" .
+  if command -v rg >/dev/null 2>&1; then
+    rg -i -l -F --hidden --glob '!.git' "$1" .
+  else
+    find . -type d -name .git -prune -o -type f -exec grep -i -l -F -- "$1" {} +
+  fi
 }
 
 # Make sure OMP (and anything it spawns) runs under zsh even when $SHELL

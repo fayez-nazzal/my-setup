@@ -17,10 +17,11 @@ done
   `Alacritty.desktop`, or just typing `alacritty`) funnels through it.
   Uses persistent tmux session `main`; under i3, focuses an existing
   Alacritty window via `i3-msg`/`jq` instead of spawning another. Outside
-  i3, or when no i3 socket is available, launches normally. Non-window
-  subcommands (`--version`, `msg`, `migrate`, `--help`) pass through to the
-  real binary. Requires `tmux`, `alacritty`; `i3-msg` and `jq` are optional
-  and only enable the i3 focus behavior.
+  i3, or when no i3 socket is available, launches normally. Explicit
+  `-e`/`--command` launches pass to the real binary so `xdg-terminal-exec`
+  can run commands in Alacritty. Other non-window subcommands (`--version`,
+  `msg`, `migrate`, `--help`) pass through too. Requires `tmux`, `alacritty`;
+  `i3-msg` and `jq` are optional and only enable the i3 focus behavior.
 - **`audio-control`** — volume/mute/gain for a specific USB headset (device
   names hardcoded at the top of the script — rename for your own hardware,
   see [`../pipewire/README.md`](../pipewire/README.md)). Requires

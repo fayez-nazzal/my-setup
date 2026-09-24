@@ -13,8 +13,9 @@
 # normally. Closing the Alacritty window only detaches tmux; the session and
 # its history survive until the tmux server is killed.
 #
-# Non-window subcommands pass straight through to the real binary so
-# `alacritty --version`/`msg`/`migrate` etc. keep working untouched.
+# Non-window subcommands pass straight through to the real binary. Explicit
+# `-e`/`--command` launches also pass through so xdg-terminal-exec can run
+# the command it requested instead of opening the persistent tmux session.
 set -euo pipefail
 
 REAL_ALACRITTY=/usr/bin/alacritty # adjust if installed elsewhere (Homebrew, etc.)
@@ -24,6 +25,15 @@ case "${1:-}" in
     exec "$REAL_ALACRITTY" "$@"
     ;;
 esac
+
+for arg in "$@"; do
+  case "$arg" in
+    -e | --command)
+      exec "$REAL_ALACRITTY" "$@"
+      ;;
+  esac
+done
+
 
 if command -v i3-msg >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   if existing=$(i3-msg -t get_tree 2>/dev/null | jq -r '

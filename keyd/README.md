@@ -21,9 +21,9 @@ to avoid confusion.)
   It remaps left/right Cmd into a `command` layer that behaves like Ctrl for
   normal application shortcuts, sends distinct Insert/Delete chords for
   terminal copy/paste/cut (`../alacritty/alacritty.toml` turns those into
-  `Copy`/`Paste` actions), and maps Command+Space to Super+Space for the
-  rofi launcher. Plain Ctrl+C in a terminal still sends `SIGINT`. The same
-  Caps Lock → F13 remap and ISO extra-key fix apply.
+  `Copy`/`Paste` actions), and maps Command+Space to Super+Space, used for
+  rofi in i3 and Vicinae in GNOME. Plain Ctrl+C in a terminal still sends
+  `SIGINT`. The same Caps Lock → F13 remap and ISO extra-key fix apply.
 
 ## Install
 
