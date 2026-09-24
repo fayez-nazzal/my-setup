@@ -18,6 +18,9 @@ NEEDS_ATTENTION=()
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
 note() { NEEDS_ATTENTION+=("$*"); }
+has_keyd() {
+  command -v keyd >/dev/null 2>&1 || command -v keyd.rvaiya >/dev/null 2>&1
+}
 
 # Ensures $BACKUP_DIR exists (created lazily, once per run).
 backup_dir() {
@@ -369,21 +372,36 @@ install_linux_packages() {
     pkgs="$pkgs build-essential"
   fi
 
+  missing=""
+  if command -v dpkg-query >/dev/null 2>&1; then
+    for pkg in $pkgs; do
+      dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' \
+        || missing="$missing $pkg"
+    done
+  else
+    missing="$pkgs"
+  fi
+  missing=${missing# }
+  [ -n "$missing" ] || {
+    log "Linux packages: already installed"
+    return 0
+  }
+
   if command -v apt-get >/dev/null 2>&1; then
     if sudo -n true 2>/dev/null; then
-      log "Installing apt packages (passwordless sudo available)"
+      log "Installing missing apt packages (passwordless sudo available)"
       # shellcheck disable=SC2086
-      sudo apt-get install -y $pkgs || warn "apt-get install had failures — check output above"
+      sudo apt-get install -y $missing || warn "apt-get install had failures — check output above"
     else
-      note "No passwordless sudo available to this script — install these yourself: sudo apt install $(echo $pkgs)"
+      note "No passwordless sudo available to this script — install these yourself: sudo apt install $missing"
     fi
   else
-    note "No apt-get found — install for your distro: $(echo $pkgs)"
+    note "No apt-get found — install for your distro: sudo apt install $missing"
   fi
 }
 
 install_keyd_from_source() {
-  command -v keyd >/dev/null 2>&1 && return 0
+  has_keyd && return 0
   command -v apt-get >/dev/null 2>&1 || return 0
   if ! command -v apt-cache >/dev/null 2>&1; then
     note "keyd is missing and apt-cache is unavailable — install keyd manually (keyd/README.md)."
@@ -470,7 +488,7 @@ link_system_config() {
 }
 
 install_linux_desktop() {
-  log "Linux: i3 + keyd + picom + Alacritty + PipeWire"
+  log "Linux: i3 + GNOME + keyd + picom + Alacritty + PipeWire"
 
   mkdir -p "$HOME/.config/i3" "$HOME/.config/i3status" "$HOME/.config/picom" "$HOME/.config/alacritty" "$HOME/.local/bin"
   link "$REPO_DIR/i3/config" "$HOME/.config/i3/config"
@@ -483,11 +501,11 @@ install_linux_desktop() {
   install_nerd_font
 
   install_keyd_from_source
-  if command -v keyd >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+  if has_keyd && sudo -n true 2>/dev/null; then
     log "keyd: installing system-wide config (needs sudo)"
     sudo mkdir -p /etc/keyd
     link_system_config "$REPO_DIR/keyd/default.conf" /etc/keyd/default.conf
-    if [ -r /proc/bus/input/devices ] && grep -q 'Vendor=05ac Product=029c' /proc/bus/input/devices; then
+    if [ -r /proc/bus/input/devices ] && grep -Eq 'Vendor=(004c|05ac) Product=029c' /proc/bus/input/devices; then
       link_system_config "$REPO_DIR/keyd/apple-magic-keyboard.conf" /etc/keyd/apple-magic-keyboard.conf
     elif [ -r /proc/bus/input/devices ] && sudo test -L /etc/keyd/apple-magic-keyboard.conf \
       && [ "$(sudo readlink /etc/keyd/apple-magic-keyboard.conf)" = "$REPO_DIR/keyd/apple-magic-keyboard.conf" ]; then
@@ -495,20 +513,34 @@ install_linux_desktop() {
       log "keyd: removed unused Apple Magic Keyboard config symlink"
     fi
     sudo systemctl enable --now keyd 2>/dev/null || note "keyd couldn't be enabled — check 'systemctl status keyd' and keyd/README.md."
-  elif ! command -v keyd >/dev/null 2>&1; then
+  elif ! has_keyd; then
     note "keyd isn't installed; see keyd/README.md."
   else
     note "keyd needs root — run the system-link/service commands in keyd/README.md yourself."
   fi
+  note "i3/config has app-specific window-class assignments — adjust them for apps you use (i3/README.md)."
 
-  note "i3/config has app-specific window-class assignments and launch shortcuts — adjust them for apps you use (i3/README.md)."
   if [ ! -f "$HOME/.config/i3/wallpaper/nature.jpg" ]; then
     note "No i3 wallpaper at $HOME/.config/i3/wallpaper/nature.jpg — add your own image or change the feh path (i3/README.md)."
   fi
 
-  note "keyd/apple-magic-keyboard.conf only matters if you have that exact keyboard (keyd/README.md)."
   note "pipewire/ (RNNoise filter + Firefox mic routing) is optional, hardware/browser-specific, and not installed by this script — see pipewire/README.md before adopting it."
 }
+install_gnome_desktop() {
+  log "GNOME: symlinking declarative dconf settings"
+  mkdir -p "$HOME/.config/my-setup" "$HOME/.local/bin"
+  link "$REPO_DIR/gnome/dconf.ini" "$HOME/.config/my-setup/gnome.dconf"
+  link "$REPO_DIR/gnome/xdg-terminals.list" "$HOME/.config/xdg-terminals.list"
+
+  if command -v dconf >/dev/null 2>&1 && [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
+    "$HOME/.local/bin/my-setup-gnome" apply \
+      || warn "GNOME dconf apply failed — run my-setup-gnome inside a GNOME session"
+  else
+    note "GNOME settings are linked but not applied — run my-setup-gnome inside a GNOME session."
+  fi
+}
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -533,6 +565,7 @@ main() {
       ;;
     Linux)
       install_linux_desktop
+      install_gnome_desktop
       install_recommended_tools
       ;;
     *)

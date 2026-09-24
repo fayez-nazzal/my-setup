@@ -7,11 +7,11 @@
 # has a bare `Exec=alacritty` resolved via $PATH) and for an interactive
 # shell alike. So *every* way of starting "alacritty" (i3's $mod+Return,
 # rofi's launcher, or just typing `alacritty`) resolves to this script
-# first, not the real binary — the single choke point that enforces one
 # window, backed by a persistent tmux session ("main") so new "terminals"
-# are tmux windows/panes, not new Alacritty processes. Closing the
-# Alacritty window only detaches tmux; the session and its history survive
-# until the tmux server is killed.
+# are tmux windows/panes, not new Alacritty processes. When i3 is running,
+# the wrapper focuses the existing Alacritty window; outside i3 it launches
+# normally. Closing the Alacritty window only detaches tmux; the session and
+# its history survive until the tmux server is killed.
 #
 # Non-window subcommands pass straight through to the real binary so
 # `alacritty --version`/`msg`/`migrate` etc. keep working untouched.
@@ -26,13 +26,16 @@ case "${1:-}" in
 esac
 
 if command -v i3-msg >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  existing=$(i3-msg -t get_tree | jq -r '
-    .. | objects
-    | select(.window_properties?.class? == "Alacritty")
-    | .id' | head -n1)
-
-  if [ -n "${existing:-}" ]; then
-    exec i3-msg "[con_id=$existing] focus" >/dev/null
+  if existing=$(i3-msg -t get_tree 2>/dev/null | jq -r '
+    first(
+      .. | objects
+      | select(.window_properties?.class? == "Alacritty")
+      | .id
+    ) // empty' 2>/dev/null); then
+    if [ -n "${existing:-}" ] \
+      && i3-msg "[con_id=$existing] focus" >/dev/null 2>&1; then
+      exit 0
+    fi
   fi
 fi
 

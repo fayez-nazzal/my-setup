@@ -15,11 +15,12 @@ done
   shells — see `../i3/README.md#gui-apps-and-the-zsh-environment`), so
   every launch path (`../i3/config`'s `$mod+Return`, rofi `drun`'s
   `Alacritty.desktop`, or just typing `alacritty`) funnels through it.
-  Enforces one Alacritty window backed by a persistent tmux session
-  (`main`); focuses the existing window via `i3-msg`/`jq` instead of
-  spawning a second one. Non-window subcommands (`--version`, `msg`,
-  `migrate`, `--help`) pass through to the real binary. Requires `i3`,
-  `jq`, `tmux`, `alacritty`.
+  Uses persistent tmux session `main`; under i3, focuses an existing
+  Alacritty window via `i3-msg`/`jq` instead of spawning another. Outside
+  i3, or when no i3 socket is available, launches normally. Non-window
+  subcommands (`--version`, `msg`, `migrate`, `--help`) pass through to the
+  real binary. Requires `tmux`, `alacritty`; `i3-msg` and `jq` are optional
+  and only enable the i3 focus behavior.
 - **`audio-control`** — volume/mute/gain for a specific USB headset (device
   names hardcoded at the top of the script — rename for your own hardware,
   see [`../pipewire/README.md`](../pipewire/README.md)). Requires
