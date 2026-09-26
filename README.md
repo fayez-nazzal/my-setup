@@ -227,8 +227,9 @@ Homebrew isn't present.
 
 See [`tmux/README.md`](tmux/README.md) — covers `.tmux.conf` symlinking,
 TPM, required plugins, and `tmuxscope` scope file installation. Fully
-cross-platform: dark/light theme detection falls back to the light palette
-on Linux unless `TMUX_THEME=dark` is set (macOS reads `defaults` instead).
+cross-platform: Linux defaults to the dark palette; macOS follows system
+dark mode and otherwise uses the light palette. `TMUX_THEME=dark` forces
+the dark palette on either platform.
 
 ### git
 

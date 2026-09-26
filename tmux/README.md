@@ -94,7 +94,6 @@ Without either helper, all core bindings and plugin behavior remain available.
 
 ## Portability notes
 
-- No username, Homebrew path, or macOS-only command is required for baseline startup.
-- macOS dark-mode detection uses `defaults` only on Darwin. Other systems use the light palette by default; set `TMUX_THEME=dark` before starting tmux to select the dark palette.
+- macOS dark-mode detection uses `defaults` only on Darwin. Linux defaults to the dark palette; macOS follows system dark mode and otherwise uses the light palette. `TMUX_THEME=dark` forces dark on either platform.
 - TPM and tmuxscope are guarded. A missing installation does not abort config loading.
 - `Ctrl-a |` and `Ctrl-a -` split panes in the current working directory. `Ctrl-a N` creates a named session, and `Ctrl-a s` opens sessionx.

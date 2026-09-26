@@ -1,5 +1,13 @@
 alias gl='git log --graph --oneline'
 
+# Reuse the dedicated editor window when running nvim without arguments in tmux.
+nvim() {
+  if [[ $# -eq 0 && -n "${TMUX:-}" ]] && tmux select-window -t '=nvim' 2>/dev/null; then
+    return
+  fi
+  command nvim "$@"
+}
+
 ffn() {
   find . -type f -not -path './.git/*' -iname "*$1*"
 }
