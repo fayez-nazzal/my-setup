@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  printf 'Usage: %s {help|escape}\n' "${0##*/}"
+  printf '  escape   XML-escape stdin without changing its whitespace.\n'
+}
+
+escape_xml() {
+  local ch
+  while IFS= read -r -N 1 ch || [[ -n $ch ]]; do
+    if [[ $ch == [[:cntrl:]] && $ch != $'\t' && $ch != $'\n' && $ch != $'\r' && $ch != $'\x7f' ]]; then
+      printf 'Input contains a character not allowed in XML 1.0.\n' >&2
+      return 2
+    fi
+    case "$ch" in
+      '&') printf '%s' '&amp;' ;;
+      '<') printf '%s' '&lt;' ;;
+      '>') printf '%s' '&gt;' ;;
+      '"') printf '%s' '&quot;' ;;
+      "'") printf '%s' '&apos;' ;;
+      *) printf '%s' "$ch" ;;
+    esac
+  done
+}
+
+case "${1:-}" in
+  help|-h|--help)
+    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    usage
+    ;;
+  escape)
+    [[ $# -eq 1 ]] || { usage >&2; exit 2; }
+    escape_xml
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

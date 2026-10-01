@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$HOME/.agents/skills"
+if [[ ${1:-} == --root ]]; then
+  [[ $# -eq 2 && -n $2 ]] || { printf 'Usage: omp-hide-aws-skills [--root DIRECTORY]\n' >&2; exit 2; }
+  root=$2
+elif [[ $# -ne 0 ]]; then
+  printf 'Usage: omp-hide-aws-skills [--root DIRECTORY]\n' >&2
+  exit 2
+fi
+[[ -d $root ]] || exit 0
+
+fail() { printf 'omp-hide-aws-skills: %s\n' "$*" >&2; exit 2; }
+shopt -s nullglob
+for dir in "$root"/*/; do
+  [[ -f "$dir/.aws-skill-metadata" ]] || continue
+  file="${dir%/}/SKILL.md"
+  [[ -e $file || -L $file ]] || continue
+  [[ ! -L $file && -f $file && -r $file && -w $file ]] || fail "target must be a readable, writable regular file, not a symlink: $file"
+
+  tmp="$(mktemp "${dir}.omp-hide.XXXXXX")" || fail "cannot create a temporary file beside $file"
+  if ! awk '
+    NR == 1 { if ($0 != "---") exit 10; print; next }
+    !closed {
+      if ($0 == "---") {
+        if (!found) print "hide: true"
+        closed = 1
+        print
+        next
+      }
+      if ($0 ~ /^hide:[[:space:]]*/) {
+        if (!found) print "hide: true"
+        found = 1
+        next
+      }
+      print
+      next
+    }
+    { print }
+    END { if (NR == 0 || !closed) exit 10 }
+  ' "$file" > "$tmp"; then
+    rm -f "$tmp"
+    fail "invalid initial YAML frontmatter in $file (expected opening and closing ---)"
+  fi
+  if cmp -s "$file" "$tmp"; then
+    rm -f "$tmp"
+    continue
+  fi
+  backup="$file.omp-hide.bak"
+  if [[ ! -e $backup ]]; then
+    cp -p "$file" "$backup" || { rm -f "$tmp"; fail "cannot preserve original file as $backup"; }
+  fi
+  chmod --reference="$file" "$tmp" 2>/dev/null || chmod "$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file")" "$tmp" || { rm -f "$tmp"; fail "cannot preserve file mode for $file"; }
+  mv -f "$tmp" "$file" || { rm -f "$tmp"; fail "cannot replace $file"; }
+done

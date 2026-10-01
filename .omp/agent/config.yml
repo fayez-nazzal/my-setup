@@ -26,27 +26,27 @@ hideThinkingBlock: true
 steeringMode: all
 followUpMode: all
 modelRoles:
-  slow: openai-codex/gpt-6-sol:high
-  writer: anthropic-api/claude-sonnet-5:medium
+  writer: anthropic/claude-opus-5-5:high
   web: web/perplexity
-  default: openai-codex/gpt-6-sol:medium
-  smol: openai-codex/gpt-6-luna:low
-  tiny: openai-codex/gpt-6-luna:minimal
+  default: openai-codex/gpt-6-luna:medium
+  tiny: camel-stream/auto:medium
   commit: openai-codex/gpt-6-luna:high
   task: openai-codex/gpt-6-luna:medium
-  plan: openai-codex/gpt-6-sol:high
+  plan: openai-codex/gpt-6.1-sol:max
   vision: anthropic-api/claude-sonnet-5:medium
   advisor: openai-codex/gpt-6-sol:medium
   image: openai-codex/gpt-image-1:auto
   speech: local/kokoro:auto
   judge: anthropic-api/claude-opus-5-5:high
+  slow: openai-codex/gpt-6.1-sol:max
+  memory: anthropic/claude-opus-5-5
+  smol: openai-codex/gpt-6-luna
 retry:
   fallbackChains:
     default:
-      - openai-api/gpt-6-luna
       - camel-stream/auto
     slow:
-      - openai-codex/gpt-6-sol
+      - openai-codex/gpt-6-astra
       - openai-api/gpt-6-sol
       - camel-stream/auto
     writer:
@@ -75,3 +75,8 @@ retry:
       - camel-stream/auto
 dev:
   autoqaConsent: denied
+cycleOrder:
+  - smol
+  - default
+  - slow
+  - tiny

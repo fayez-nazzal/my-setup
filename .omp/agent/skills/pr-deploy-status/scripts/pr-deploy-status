@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+# Read-only correlation of a merged GitHub revision with CodePipeline evidence.
+set -u
+export AWS_PAGER=''
+export GH_PAGER=''
+
+usage() {
+  cat <<'HELP'
+Usage: pr-deploy-status [--pr N | --sha SHA] [--repo OWNER/NAME] [--base BRANCH]
+  [--profile NAME] [--region REGION] [--pipeline NAME] [--deploy-stage NAME]
+  [--max-executions N] [--log-lines N] [--help]
+Read-only GitHub/AWS deployment evidence. Exit 0 report, 2 usage/config, 3 AWS, 4 GitHub.
+HELP
+}
+fail() { printf 'error: %s\n' "$*" >&2; exit "${2:-2}"; }
+clean() { LC_ALL=C tr -cd '\11\12\15\40-\176' | sed -E 's/\x1B\[[0-9;]*[[:alpha:]]//g' | cut -c1-500; }
+pr=''; sha=''; repo=''; base_arg=''; profile=''; region=''; only_pipeline=''; deploy_stage=''; max_exec=50; log_lines=60
+while (($#)); do
+  case "$1" in
+    --help) usage; exit 0;;
+    --pr|--sha|--repo|--base|--profile|--region|--pipeline|--deploy-stage|--max-executions|--log-lines)
+      (($# >= 2)) || fail "missing value for $1"
+      opt=$1; val=$2; shift 2
+      case "$opt" in
+        --pr) [[ $val =~ ^[1-9][0-9]*$ ]] || fail 'PR must be a positive integer'; pr=$val;;
+        --sha) [[ $val =~ ^[[:xdigit:]]{7,40}$ ]] || fail 'SHA must be 7-40 hexadecimal characters'; sha=$val;;
+        --repo) repo=$val;; --base) base_arg=$val;; --profile) profile=$val;; --region) region=$val;;
+        --pipeline) only_pipeline=$val;; --deploy-stage) deploy_stage=$val;;
+        --max-executions) [[ $val =~ ^([1-9][0-9]?|100)$ ]] || fail 'max-executions must be 1-100'; max_exec=$val;;
+        --log-lines) [[ $val =~ ^([1-9][0-9]?|1[0-9]{2}|200)$ ]] || fail 'log-lines must be 1-200'; log_lines=$val;;
+      esac;;
+    *) fail "unknown option: $1";;
+  esac
+done
+[[ -z $pr || -z $sha ]] || fail 'choose only one of --pr and --sha'
+if [[ -z $repo ]]; then repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null) || fail 'cannot determine repository; use --repo OWNER/NAME' 4; fi
+[[ $repo =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail 'repo must be OWNER/NAME'
+command -v gh >/dev/null || fail 'gh CLI is required' 2
+command -v aws >/dev/null || fail 'AWS CLI is required' 2
+gh auth status >/dev/null 2>&1 || fail 'GitHub authentication failed; run gh auth login' 4
+login=$(gh api user --jq .login 2>/dev/null) || fail 'cannot identify authenticated GitHub user' 4
+if [[ -z $profile ]]; then profile=${AWS_PROFILE:-}; fi
+if [[ -z $profile ]]; then
+  profiles=$(aws configure list-profiles 2>/dev/null) || fail 'cannot read AWS profiles; specify --profile' 2
+  count=$(printf '%s\n' "$profiles" | sed '/^$/d' | wc -l | tr -d ' ')
+  [[ $count == 1 ]] || fail 'select one AWS profile with --profile'
+  profile=$profiles
+fi
+if [[ -z $region ]]; then region=${AWS_REGION:-${AWS_DEFAULT_REGION:-}}; fi
+if [[ -z $region ]]; then region=$(aws configure get region --profile "$profile" 2>/dev/null || :); fi
+[[ -n $region ]] || fail 'AWS region missing; specify --region' 2
+awsro() { aws --profile "$profile" --region "$region" --no-cli-pager "$@"; }
+identity=$(awsro sts get-caller-identity --query '[Account,Arn]' --output text 2>/dev/null) || fail "AWS identity unavailable; if SSO expired run: aws sso login --profile $profile" 3
+account=${identity%%$'\t'*}
+pr_url=''; merged=''; target_sha=''; prnum=''; target_state='merged'; target_base=''; merged_at=''
+if [[ -n $pr ]]; then
+  prdata=$(gh api "repos/$repo/pulls/$pr" --jq '[.number,.html_url,.merged,.base.ref,.merged_at,.merge_commit_sha] | @tsv' 2>/dev/null) || fail 'GitHub PR lookup failed' 4
+  IFS=$'\t' read -r prnum pr_url merged_flag target_base merged_at target_sha <<<"$prdata"
+  [[ $merged_flag == true ]] || target_state=not-merged
+  if [[ -n $base_arg && $base_arg != "$target_base" ]]; then fail "requested base $base_arg conflicts with PR base $target_base"; fi
+elif [[ -n $sha ]]; then
+  target_sha=$(gh api "repos/$repo/commits/$sha" --jq .sha 2>/dev/null) || fail 'GitHub commit lookup failed' 4
+  merged_at=$(gh api "repos/$repo/commits/$target_sha" --jq '.commit.committer.date' 2>/dev/null) || fail 'GitHub commit date lookup failed' 4
+  prnum=none; pr_url=none; target_base=${base_arg:-$(gh repo view "$repo" --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null)}
+else
+  target_base=${base_arg:-$(gh repo view "$repo" --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null)}
+  [[ -n $target_base ]] || fail 'cannot determine base branch' 4
+  prs=$(gh api "repos/$repo/pulls?state=closed&base=$target_base&sort=updated&direction=desc&per_page=100" --jq "[.[] | select(.merged_at != null and .merged_by.login == \"$login\")] | sort_by(.merged_at) | last | if . == null then empty else [.number,.html_url,.base.ref,.merged_at,.merge_commit_sha] | @tsv end" 2>/dev/null) || fail 'GitHub merged PR lookup failed' 4
+  [[ -n $prs && $prs != 'null' ]] || fail "no PR merged by $login found in latest 100 closed PRs for $target_base; use --pr N" 4
+  IFS=$'\t' read -r prnum pr_url target_base merged_at target_sha <<<"$prs"
+fi
+if [[ $target_state == merged && -z $target_sha ]]; then fail 'merged PR has no merge SHA' 4; fi
+selection_basis=''
+[[ -z $pr ]] || selection_basis=explicit-pr
+[[ -z $sha ]] || selection_basis=explicit-sha
+[[ -n $selection_basis ]] || selection_basis=latest-pr-merged-by-authenticated-user
+printf '== PR\nrepo=%s\nbase=%s\nnumber=%s\nurl=%s\nmerged_at=%s\nmerge_sha=%s\ntarget_state=%s\nselection_basis=%s\n' "$repo" "$target_base" "$prnum" "$pr_url" "$merged_at" "$target_sha" "$target_state" "$selection_basis"
+[[ $target_state == merged ]] || { printf 'report_complete=yes\n'; exit 0; }
+printf '== AWS\naccount=%s\nregion=%s\nprofile=%s\n' "$account" "$region" "$profile"
+pipelines=$(awsro codepipeline list-pipelines --query 'pipelines[].name' --output text 2>/dev/null) || fail 'CodePipeline list-pipelines failed' 3
+matched=0
+IFS=$'\t ' read -r -a pipeline_names <<<"$pipelines"
+for pipeline in "${pipeline_names[@]}"; do
+  [[ -z $only_pipeline || $pipeline == "$only_pipeline" ]] || continue
+  cfg=$(awsro codepipeline get-pipeline --name "$pipeline" --output json 2>/dev/null) || fail "get-pipeline failed for $pipeline; cannot establish source identity" 3
+  source_names=$(awsro codepipeline get-pipeline --name "$pipeline" --query "pipeline.stages[].actions[?actionTypeId.provider=='CodeStarSourceConnection'].name" --output text 2>/dev/null || :)
+  source_count=$(printf '%s\n' "$source_names" | tr '\t' '\n' | sed '/^$/d' | wc -l | tr -d ' ')
+  if ((source_count > 1)); then printf '== PIPELINE %s\nsource_configuration=ambiguous-source-actions\n' "$pipeline"; continue; fi
+  [[ $source_count == 1 ]] || continue
+  source_action=$(printf '%s\n' "$source_names" | tr '\t' '\n' | sed -n '1p')
+  repo_id=$(awsro codepipeline get-pipeline --name "$pipeline" --query "pipeline.stages[].actions[?name=='$source_action'].configuration.FullRepositoryId | [0][0]" --output text 2>/dev/null || :)
+  branch=$(awsro codepipeline get-pipeline --name "$pipeline" --query "pipeline.stages[].actions[?name=='$source_action'].configuration.BranchName | [0][0]" --output text 2>/dev/null || :)
+  if [[ ${repo_id,,} == ${repo,,} && $branch != "$target_base" ]]; then
+    printf '== PIPELINE %s\nsource_repository=%s\nsource_branch=%s\nsource_configuration=branch-filter-needs-inspection\n' "$pipeline" "$repo_id" "$branch"
+    continue
+  fi
+  [[ ${repo_id,,} == ${repo,,} && $branch == "$target_base" ]] || continue
+  ((matched+=1))
+  if [[ -n $deploy_stage ]]; then
+    declared_stage=$(awsro codepipeline get-pipeline --name "$pipeline" --query "pipeline.stages[?name=='$deploy_stage'].name" --output text 2>/dev/null || :)
+    [[ $declared_stage == "$deploy_stage" ]] || fail "--deploy-stage '$deploy_stage' is not declared in matching pipeline $pipeline"
+  fi
+  deploy_declared=no
+  if [[ -n $deploy_stage ]]; then
+    deploy_declared=yes
+  else
+    configured_deploy_stage=$(awsro codepipeline get-pipeline --name "$pipeline" --query "pipeline.stages[?name=='Deploy'].name | [0]" --output text 2>/dev/null || :)
+    [[ $configured_deploy_stage == Deploy ]] && deploy_declared=yes
+  fi
+  printf '== PIPELINE %s\nsource_repository=%s\nsource_branch=%s\nsource_action=%s\n' "$pipeline" "$repo_id" "$branch" "$source_action"
+  executions=$(awsro codepipeline list-pipeline-executions --pipeline-name "$pipeline" --max-results "$max_exec" --query "pipelineExecutionSummaries[].[pipelineExecutionId,status,sourceRevisions[?actionName=='$source_action'].revisionId | [0],startTime,lastUpdateTime]" --output text 2>/dev/null) || fail "execution history read failed for $pipeline" 3
+  exact_id=''; exact_status=''; cover_id=''; cover_status=''; cover_rev=''
+  while IFS=$'\t' read -r eid estatus revision created updated; do
+    [[ -n $eid ]] || continue
+    if [[ $revision == "$target_sha" && -z $exact_id ]]; then exact_id=$eid; exact_status=$estatus; fi
+    contains=false
+    if [[ $revision == "$target_sha" ]]; then contains=true
+    elif [[ $revision =~ ^[[:xdigit:]]{7,40}$ ]]; then
+      cmp=$(gh api "repos/$repo/compare/$target_sha...$revision" --jq .status 2>/dev/null) || { printf 'compare_status=unknown revision=%s\n' "$revision"; continue; }
+      [[ $cmp == ahead || $cmp == identical ]] && contains=true
+    fi
+    if $contains && [[ -z $cover_id ]]; then cover_id=$eid; cover_status=$estatus; cover_rev=$revision; fi
+  done <<<"$executions"
+  printf 'exact_execution=%s\nexact_execution_status=%s\nnewest_covering_execution=%s\nnewest_covering_revision=%s\n' "${exact_id:-none}" "${exact_status:-unknown}" "${cover_id:-none}" "${cover_rev:-none}"
+  if [[ -z $cover_id ]]; then printf 'deployed=unknown\nexecution=none\n'; continue; fi
+  actions=$(awsro codepipeline list-action-executions --pipeline-name "$pipeline" --filter "pipelineExecutionId=$cover_id" --query 'actionExecutionDetails[].[stageName,actionName,status,input.actionTypeId.category,input.actionTypeId.provider,output.executionResult.externalExecutionId,output.executionResult.externalExecutionUrl]' --output text 2>/dev/null) || { printf 'deployed=unknown\naction_evidence=unavailable\n'; continue; }
+  dep_count=0; dep_success=0; dep_pending=0; dep_bad=0
+  while IFS=$'\t' read -r stage action status category provider build url; do
+    [[ -n $action ]] || continue
+    selected=false
+    [[ -n $deploy_stage && $stage == "$deploy_stage" ]] && selected=true
+    [[ -z $deploy_stage && ( $category == Deploy || ${stage,,} == deploy ) ]] && selected=true
+    if $selected; then
+      ((dep_count+=1)); [[ $status == Succeeded ]] && ((dep_success+=1)) || { [[ $status == InProgress ]] && ((dep_pending+=1)) || ((dep_bad+=1)); }
+    fi
+    printf 'action=%s/%s status=%s provider=%s execution_id=%s url=%s\n' "$stage" "$action" "$status" "$provider" "$build" "$url"
+    if [[ $status == Failed && $provider == CodeBuild && -n $build ]]; then
+      build_meta=$(awsro codebuild batch-get-builds --ids "$build" --query 'builds[].[buildStatus,logs.groupName,logs.streamName]' --output text 2>/dev/null) || { printf 'diagnostics_complete=no gap=CodeBuild-read-failed\n'; continue; }
+      IFS=$'\t' read -r build_status log_group log_stream <<<"$build_meta"
+      printf 'failure_provider=CodeBuild build=%s build_status=%s log_group=%s log_stream=%s\n' "$build" "$build_status" "${log_group:-unavailable}" "${log_stream:-unavailable}"
+      if [[ -n ${log_group:-} && $log_group != None && -n ${log_stream:-} && $log_stream != None ]]; then
+        private_dir=$(mktemp -d "${TMPDIR:-/tmp}/pr-deploy-status.XXXXXXXX") || { printf 'diagnostics_complete=no gap=private-temp-unavailable\n'; continue; }
+        chmod 700 "$private_dir"; log_file=$private_dir/events
+        (umask 077; awsro logs filter-log-events --log-group-name "$log_group" --log-stream-names "$log_stream" --limit 10000 --query 'events[].message' --output text >"$log_file" 2>/dev/null) || { rm -rf "$private_dir"; printf 'diagnostics_complete=no gap=CloudWatch-read-failed\n'; continue; }
+        sed -E '/password[=:]|token[=:]|authorization[=:]|bearer[[:space:]]/Id' "$log_file" >"$private_dir/safe"
+        failure_lines=$(grep -Ein 'BUILD FAILURE|BUILD command|vitest-pool|Worker exited|FAIL[[:space:]]|error TS[0-9]+|AccessDenied|CREATE_FAILED|UPDATE_FAILED|DELETE_FAILED|out of memory|OOM|exit code [1-9]' "$private_dir/safe" | tail -n "$log_lines" | cut -d: -f1 || :)
+        if [[ -n $failure_lines ]]; then
+          printf 'failure_excerpt_begin\n'
+          while IFS= read -r line_no; do from=$((line_no > 2 ? line_no - 2 : 1)); to=$((line_no + 2)); sed -n "${from},${to}p" "$private_dir/safe"; done <<<"$failure_lines" | awk '!seen[$0]++' | clean | tail -n "$log_lines"
+          printf 'failure_excerpt_end\ndiagnostics_complete=yes\n'
+        else printf 'diagnostics_complete=no gap=no-structured-terminal-failure-marker\n'; fi
+        rm -rf "$private_dir"
+      else printf 'diagnostics_complete=no gap=missing-CodeBuild-log-pointer\n'; fi
+    fi
+  done <<<"$actions"
+  if ((dep_count == 0)) && [[ $cover_status == InProgress && $deploy_declared == yes ]]; then outcome=pending
+  elif ((dep_count == 0)); then outcome=unknown
+  elif ((dep_success == dep_count)); then outcome=yes
+  elif ((dep_pending > 0)) && [[ $cover_status == InProgress ]]; then outcome=pending
+  else outcome=no
+  fi
+  printf 'execution_status=%s\ndeployed=%s\n' "$cover_status" "$outcome"
+done
+((matched > 0)) || { printf 'pipeline=none\nexecution=none\ndeployed=unknown\n'; }
+printf 'scan_limit_executions=%s\nreport_complete=yes\n' "$max_exec"

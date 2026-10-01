@@ -32,6 +32,9 @@ omp() {
     perplexity_key="$(op read "op://Personal/Perplexity Web Search/password" --no-newline 2>/dev/null)" || perplexity_key=""
     [[ -n "$perplexity_key" ]] && export PERPLEXITY_API_KEY="$perplexity_key"
   fi
+  if command -v omp-hide-aws-skills >/dev/null 2>&1; then
+    omp-hide-aws-skills || return $?
+  fi
   SHELL="$(command -v zsh)" command omp "$@"
 }
 

@@ -244,6 +244,7 @@ install_omp() {
   link "$REPO_DIR/.omp/agent/mcp.json"      "$HOME/.omp/agent/mcp.json"
   link "$REPO_DIR/.omp/agent/extensions"    "$HOME/.omp/agent/extensions"
   link "$REPO_DIR/.omp/agent/skills"        "$HOME/.omp/agent/skills"
+  link "$REPO_DIR/bin/omp-hide-aws-skills" "$HOME/.local/bin/omp-hide-aws-skills"
   note "~/.omp/agent/ also holds live runtime state (databases, sessions, caches) once the agent has run. This script only ever touches config.yml/models.yml/mcp.json/extensions/skills — never symlink the whole agent/ directory."
 }
 
@@ -308,9 +309,26 @@ install_recommended_tools() {
 
   if command -v brew >/dev/null 2>&1; then
     log "Recommended tools: installing via Homebrew"
-    brew install starship zoxide fzf bat eza fd ripgrep thefuck || warn "brew install had failures"
+    brew install starship zoxide fzf bat eza fd ripgrep thefuck uv || warn "brew install had failures"
     return 0
   fi
+  if ! command -v uv >/dev/null 2>&1 || ! command -v uvx >/dev/null 2>&1; then
+    local installer
+    installer="$(mktemp)" || {
+      warn "uv: could not create temporary installer file"
+      note "uv/uvx unavailable; install uv before configuring the AWS MCP server."
+      return 0
+    }
+    if curl -fsSL https://astral.sh/uv/install.sh -o "$installer" &&
+       UV_INSTALL_DIR="$HOME/.local/bin" UV_NO_MODIFY_PATH=1 sh "$installer"; then
+      :
+    else
+      warn "uv: official installer failed"
+      note "uv/uvx unavailable; install uv before configuring the AWS MCP server."
+    fi
+    rm -f "$installer"
+  fi
+
 
   if ! command -v starship >/dev/null 2>&1; then
     log "starship: installing (user-local, no sudo)"
