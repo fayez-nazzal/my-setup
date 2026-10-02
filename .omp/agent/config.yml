@@ -38,7 +38,7 @@ modelRoles:
   image: openai-codex/gpt-image-1:auto
   speech: local/kokoro:auto
   judge: anthropic-api/claude-opus-5-5:high
-  slow: openai-codex/gpt-6.1-sol:max
+  slow: anthropic/claude-opus-5-5:max
   memory: anthropic/claude-opus-5-5
   smol: openai-codex/gpt-6-luna
 retry:
