@@ -28,11 +28,11 @@ followUpMode: all
 modelRoles:
   writer: anthropic/claude-opus-5-5:high
   web: web/perplexity
-  default: openai-codex/gpt-6-luna:medium
+  default: openai-codex/gpt-6-luna:high
   tiny: camel-stream/auto:medium
   commit: openai-codex/gpt-6-luna:high
   task: openai-codex/gpt-6-luna:medium
-  plan: openai-codex/gpt-6.1-sol:max
+  plan: anthropic/claude-opus-5-5:max
   vision: anthropic-api/claude-sonnet-5:medium
   advisor: openai-codex/gpt-6-sol:medium
   image: openai-codex/gpt-image-1:auto
@@ -64,7 +64,7 @@ retry:
       - openai-api/gpt-6-luna
       - camel-stream/auto
     plan:
-      - openai-api/gpt-6-sol
+      - openai-codex/gpt-6.1-sol
       - camel-stream/auto
     vision:
       - camel-stream/auto

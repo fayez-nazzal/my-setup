@@ -12,6 +12,10 @@
       ],
       "timeout": 300000,
       "instructions": false
+    },
+    "upwork": {
+      "type": "http",
+      "url": "https://mcp.upwork.com/mcp"
     }
   }
 }
