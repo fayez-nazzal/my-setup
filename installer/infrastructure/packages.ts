@@ -6,7 +6,8 @@ import type { HostFacts } from "./host.ts";
 
 export interface CommandResult { code: number; stdout: string; stderr: string }
 export type RunCommand = (executable: string, args: readonly string[], options?: { cwd?: string; env?: Record<string, string>; quiet?: boolean }) => Promise<CommandResult>;
-export interface SoftwareState { installed: boolean; healthy: boolean; reason?: string; route?: string; packageName?: string }
+/** `installed` means a healthy executable exists; `outdated` marks an installed tool whose `route` updates it. */
+export interface SoftwareState { installed: boolean; healthy: boolean; reason?: string; route?: string; packageName?: string; outdated?: boolean }
 export interface RecipeContext {
   host: HostFacts;
   home: string;
@@ -24,22 +25,59 @@ const aptPackage = (id: string) => aptNames[id] ?? id;
 const brewPackage = (id: string) => brewNames[id] ?? id;
 const commandFor = (host: HostFacts, key: string) => host.executables.get(key);
 
+const executableAliases: Record<string, readonly string[]> = { fd: ["fd", "fdfind"], bat: ["bat", "batcat"], keyd: ["keyd", "keyd.rvaiya"], ripgrep: ["rg"] };
+const versionArgs: Record<string, readonly string[]> = { tmux: ["-V"] };
+
 export async function executableHealthy(context: PackageContext, id: string): Promise<boolean> {
-  const aliases: Record<string, readonly string[]> = { fd: ["fd", "fdfind"], bat: ["bat", "batcat"], keyd: ["keyd", "keyd.rvaiya"] };
-  for (const name of aliases[id] ?? [id]) {
+  for (const name of executableAliases[id] ?? [id]) {
     const executable = commandFor(context.host, name);
     if (!executable) continue;
-    const result = await context.run(executable, ["--version"], { quiet: true });
+    const result = await context.run(executable, versionArgs[name] ?? ["--version"], { quiet: true });
     if (result.code === 0) return true;
   }
   return false;
 }
 
+interface BrewInventory { installed: ReadonlySet<string>; outdated: ReadonlySet<string> }
+/** One inventory per host snapshot; refreshHost replaces the host, which invalidates it. */
+const brewInventories = new WeakMap<HostFacts, Promise<BrewInventory>>();
+const brewShortName = (pkg: string) => pkg.split("/").at(-1)!;
+function brewInventory(context: PackageContext, brew: string): Promise<BrewInventory> {
+  let inventory = brewInventories.get(context.host);
+  if (!inventory) {
+    inventory = (async () => {
+      const [formulae, casks, outdated] = await Promise.all([
+        context.run(brew, ["list", "--formula", "-1"], { quiet: true }),
+        context.run(brew, ["list", "--cask", "-1"], { quiet: true }),
+        context.run(brew, ["outdated", "--json=v2"], { quiet: true }),
+      ]);
+      const installed = new Set([...formulae.stdout.split("\n"), ...casks.stdout.split("\n")].map(line => line.trim()).filter(Boolean));
+      const stale = new Set<string>();
+      try {
+        const data = JSON.parse(outdated.stdout) as { formulae?: Array<{ name?: string }>; casks?: Array<{ name?: string }> };
+        for (const item of [...data.formulae ?? [], ...data.casks ?? []]) if (item.name) stale.add(brewShortName(item.name));
+      } catch { /* Without outdated metadata, installed packages are left as they are. */ }
+      return { installed, outdated: stale };
+    })();
+    brewInventories.set(context.host, inventory);
+  }
+  return inventory;
+}
 async function brewInstalled(context: PackageContext, pkg: string): Promise<boolean | undefined> {
   const brew = context.host.packageManagers.brew;
   if (!brew) return undefined;
-  const result = await context.run(brew, ["list", "--versions", ...pkg.split(" ")], { quiet: true });
-  return result.code === 0 && result.stdout.trim().length > 0;
+  return (await brewInventory(context, brew)).installed.has(brewShortName(pkg));
+}
+async function brewOutdated(context: PackageContext, pkg: string): Promise<boolean> {
+  const brew = context.host.packageManagers.brew;
+  if (!brew) return false;
+  const inventory = await brewInventory(context, brew);
+  return inventory.installed.has(brewShortName(pkg)) && inventory.outdated.has(brewShortName(pkg));
+}
+/** Healthy Homebrew-managed software that Homebrew reports outdated gets an upgrade route. */
+async function healthyState(context: PackageContext, brewName: string | undefined): Promise<SoftwareState> {
+  if (brewName && await brewOutdated(context, brewName.replace(/^--cask /, ""))) return { installed: true, healthy: true, outdated: true, route: "brew-upgrade", packageName: brewName };
+  return { installed: true, healthy: true };
 }
 async function brewCaskEnabled(context: PackageContext, pkg: string): Promise<boolean> {
   const brew = context.host.packageManagers.brew;
@@ -100,8 +138,73 @@ async function inspectAlacrittySource(context: PackageContext): Promise<Software
   if (missing.length) return { installed: false, healthy: false, reason: `Alacritty source build requires ${missing.join(", ")}.` };
   const rustMissing = !commandFor(context.host, "cargo") || !commandFor(context.host, "rustc") || !commandFor(context.host, "scdoc");
   if (rustMissing && !context.host.packageManagers.brew) return { installed: false, healthy: false, reason: "Alacritty source build needs Rust and scdoc; install Rust >=1.85.0 and scdoc, then rerun." };
-  return { installed: false, healthy: false, route: "source", reason: "Homebrew's Alacritty cask is unavailable; build the stable upstream source." };
+  return { installed: false, healthy: false, route: "source", reason: "Homebrew's Alacritty cask is unavailable; build the latest stable upstream release." };
 }
+
+/** Latest stable GitHub release tag, or undefined when offline/rate-limited (installed software is then left alone). */
+export async function latestGithubRelease(context: PackageContext, repository: string): Promise<string | undefined> {
+  const curl = commandFor(context.host, "curl");
+  if (!curl) return undefined;
+  const response = await context.run(curl, ["-fsSL", `https://api.github.com/repos/${repository}/releases/latest`], { quiet: true });
+  if (response.code !== 0) return undefined;
+  try {
+    const data = JSON.parse(response.stdout) as { tag_name?: unknown; prerelease?: unknown };
+    return !data.prerelease && typeof data.tag_name === "string" ? data.tag_name : undefined;
+  } catch { return undefined; }
+}
+
+async function inspectAlacrittyDarwin(context: PackageContext): Promise<SoftwareState> {
+  const brew = context.host.packageManagers.brew;
+  const executable = commandFor(context.host, "alacritty");
+  const version = executable ? await context.run(executable, ["--version"], { quiet: true }) : undefined;
+  if (version?.code === 0) {
+    if (await brewInstalled(context, "alacritty")) return healthyState(context, brewPackage("alacritty"));
+    const installed = /alacritty\s+(\d+\.\d+\.\d+)/.exec(version.stdout)?.[1];
+    const latest = (await latestGithubRelease(context, "alacritty/alacritty"))?.replace(/^v/, "");
+    if (!installed || !latest || installed === latest) return { installed: true, healthy: true };
+    const source = await inspectAlacrittySource(context);
+    return source.route ? { ...source, installed: true, healthy: true, outdated: true, reason: `Alacritty ${installed} is installed; rebuild the latest stable release ${latest}.` } : { installed: true, healthy: true };
+  }
+  if (brew && await brewCaskEnabled(context, "alacritty")) return { installed: false, healthy: false, route: "brew", packageName: brewPackage("alacritty") };
+  return inspectAlacrittySource(context);
+}
+
+export const aerospaceRepository = "https://github.com/nikitabobko/AeroSpace.git";
+export const aerospaceApp = "/Applications/AeroSpace.app";
+/** DEVELOPER_DIR of a full Xcode install; AeroSpace's release build needs xcodebuild, which the CLT lack. */
+export async function fullXcodeDeveloperDir(context: PackageContext): Promise<string | undefined> {
+  const candidates: string[] = [];
+  const selector = commandFor(context.host, "xcode-select");
+  const selected = selector ? await context.run(selector, ["-p"], { quiet: true }) : undefined;
+  if (selected?.code === 0 && selected.stdout.includes(".app/")) candidates.push(selected.stdout.trim());
+  const apps = (await readdir("/Applications").catch(() => [] as string[])).filter(name => /^Xcode.*\.app$/.test(name)).sort((left, right) => (left === "Xcode.app" ? -1 : right === "Xcode.app" ? 1 : left.localeCompare(right)));
+  candidates.push(...apps.map(name => join("/Applications", name, "Contents/Developer")));
+  for (const candidate of candidates) {
+    if ((await context.run(join(candidate, "usr/bin/xcodebuild"), ["-version"], { quiet: true, env: { DEVELOPER_DIR: candidate } }).catch(() => undefined))?.code === 0) return candidate;
+  }
+  return undefined;
+}
+
+async function inspectAerospace(context: PackageContext): Promise<SoftwareState> {
+  const cli = commandFor(context.host, "aerospace");
+  const version = cli ? await context.run(cli, ["--version"], { quiet: true }) : undefined;
+  const appPresent = await stat(join(aerospaceApp, "Contents/MacOS/AeroSpace")).then(() => true, () => false);
+  const installed = version?.code === 0 && appPresent;
+  const cask = Boolean(await brewInstalled(context, "aerospace"));
+  const sourceAvailable = Boolean(context.host.packageManagers.brew && commandFor(context.host, "git") && await fullXcodeDeveloperDir(context));
+  if (!sourceAvailable) {
+    if (installed) return cask ? healthyState(context, brewPackage("aerospace")) : { installed: true, healthy: true };
+    if (await brewCaskEnabled(context, brewPackage("aerospace").replace(/^--cask /, ""))) return { installed: false, healthy: false, route: cask ? "brew-reinstall" : "brew", packageName: brewPackage("aerospace"), reason: "Full Xcode or Homebrew is unavailable for a source build; installing the AeroSpace Homebrew cask instead." };
+    return { installed: false, healthy: false, reason: "AeroSpace needs Homebrew plus full Xcode (source build) or an enabled Homebrew cask." };
+  }
+  if (!installed) return { installed: false, healthy: false, route: "aerospace-source", reason: "Build AeroSpace from the main branch." };
+  if (cask) return { installed: true, healthy: true, outdated: true, route: "aerospace-source", reason: "Replace the AeroSpace Homebrew cask with a build of the main branch." };
+  const remote = await context.run(commandFor(context.host, "git")!, ["ls-remote", aerospaceRepository, "refs/heads/main"], { quiet: true });
+  const head = remote.code === 0 ? /^([0-9a-f]{40})\s/.exec(remote.stdout)?.[1] : undefined;
+  if (!head || version.stdout.includes(head)) return { installed: true, healthy: true };
+  return { installed: true, healthy: true, outdated: true, route: "aerospace-source", reason: "Rebuild AeroSpace from the newer main branch." };
+}
+
 export async function inspectSoftware(context: PackageContext, id: string): Promise<SoftwareState> {
   if (id === "linux-desktop") {
     if (context.host.platform !== "linux" || !context.host.packageManagers.apt) return { installed: false, healthy: false, reason: "The native desktop bundle requires Linux with APT." };
@@ -116,41 +219,23 @@ export async function inspectSoftware(context: PackageContext, id: string): Prom
   if (id === "volta") return inspectVolta(context);
   if (id === "node-lts") return inspectNodeLts(context);
   if (id === "nerd-font") return inspectGeistFont(context);
-  if (id === "alacritty" && context.host.platform === "darwin") {
-    const installed = await executableHealthy(context, id);
-    if (installed) return { installed: true, healthy: true };
-  } else if (await executableHealthy(context, id)) return { installed: true, healthy: true };
-  if (id === "aerospace" && context.host.platform === "darwin") {
-    for (const app of [join(context.host.home, "Applications/AeroSpace.app/Contents/MacOS/AeroSpace"), "/Applications/AeroSpace.app/Contents/MacOS/AeroSpace"]) {
-      try {
-        await stat(app);
-        if ((await context.run(app, ["--version"], { quiet: true })).code === 0) return { installed: true, healthy: true };
-      } catch { /* Continue to the other standard Applications location. */ }
-    }
-  }
+  if (id === "alacritty" && context.host.platform === "darwin") return inspectAlacrittyDarwin(context);
+  if (id === "aerospace" && context.host.platform === "darwin") return inspectAerospace(context);
   const brew = context.host.packageManagers.brew;
   const apt = context.host.packageManagers.apt;
-  if (brew && !(id === "alacritty" && context.host.platform === "linux")) {
-    const name = brewPackage(id);
-    if (name.startsWith("--cask ")) {
-      const [flag, pkg] = name.split(" ");
-      const installed = await brewInstalled(context, pkg);
-      if (installed) return { installed: false, healthy: false, reason: `${pkg} is manager-installed but its executable is unavailable; repair PATH/application`, route: "brew", packageName: `${flag} ${pkg}` };
-      if (await brewCaskEnabled(context, pkg)) return { installed: false, healthy: false, route: "brew", packageName: `${flag} ${pkg}` };
-      if (id === "alacritty" && context.host.platform === "darwin") return inspectAlacrittySource(context);
-    } else {
-      const installed = await brewInstalled(context, name);
-      if (installed) return { installed: false, healthy: false, reason: `${name} is installed by Homebrew but no healthy executable was found; repair PATH`, route: "brew", packageName: name };
-      const info = await context.run(brew, ["info", "--json=v2", name], { quiet: true });
-      if (info.code === 0 && info.stdout.includes(name)) return { installed: false, healthy: false, route: "brew", packageName: name };
-    }
+  const brewName = brew && !(id === "alacritty" && context.host.platform === "linux") ? brewPackage(id) : undefined;
+  if (await executableHealthy(context, id)) return healthyState(context, brewName);
+  if (brew && brewName) {
+    const cask = brewName.startsWith("--cask ");
+    const pkg = brewName.replace(/^--cask /, "");
+    if (await brewInstalled(context, pkg)) return { installed: false, healthy: false, reason: `${pkg} is installed by Homebrew but its executable is unhealthy; reinstalling it.`, route: "brew-reinstall", packageName: brewName };
+    if (cask ? await brewCaskEnabled(context, pkg) : await context.run(brew, ["info", "--json=v2", pkg], { quiet: true }).then(info => info.code === 0 && info.stdout.includes(pkg))) return { installed: false, healthy: false, route: "brew", packageName: brewName };
   }
-  if (id === "alacritty" && context.host.platform === "darwin" && !brew) return inspectAlacrittySource(context);
   if (apt && context.host.platform === "linux") {
     const pkg = aptPackage(id);
     const names = pkg.split(" ");
     const states = await Promise.all(names.map(name => aptInstalled(context, name)));
-    if (states.some(Boolean)) return { installed: false, healthy: false, reason: `${pkg} is installed by APT but no healthy executable was found; repair PATH`, route: "apt", packageName: pkg };
+    if (states.some(Boolean)) return { installed: false, healthy: false, reason: `${pkg} is installed by APT but its executable is unhealthy; reinstalling it.`, route: "apt-reinstall", packageName: pkg };
     const candidates = await Promise.all(names.map(name => aptCandidate(context, name)));
     if (candidates.every(Boolean)) return { installed: false, healthy: false, route: "apt", packageName: pkg };
     if (["starship", "zoxide", "fzf", "bat", "eza", "fd", "ripgrep"].includes(id)) {
@@ -202,9 +287,20 @@ async function installCheckout(context: PackageContext, id: string): Promise<Com
   return { code: 0, stdout: `${id} checkout installed`, stderr: "" };
 }
 
-async function installApt(context: PackageContext, names: string): Promise<CommandResult> {
+async function installApt(context: PackageContext, names: string, reinstall = false): Promise<CommandResult> {
   const apt = context.host.packageManagers.apt;
-  return apt ? context.run("sudo", [apt, "install", "-y", ...names.split(" ")]) : { code: 1, stdout: "", stderr: "APT is unavailable" };
+  return apt ? context.run("sudo", [apt, "install", "-y", ...(reinstall ? ["--reinstall"] : []), ...names.split(" ")]) : { code: 1, stdout: "", stderr: "APT is unavailable" };
+}
+
+/** Run `brew <verb>` for a catalog package name such as `ripgrep` or `--cask nikitabobko/tap/aerospace`. */
+export async function brewPackageCommand(context: PackageContext, verb: "install" | "upgrade" | "reinstall", packageName: string): Promise<CommandResult> {
+  const brew = context.host.packageManagers.brew;
+  if (!brew) return { code: 1, stdout: "", stderr: "Homebrew is unavailable" };
+  const args = packageName.split(" ");
+  const result = await context.run(brew, [verb, ...args], { env: { HOMEBREW_NO_AUTO_UPDATE: "1" } });
+  // A reinstall does not restore links another formula or a stray file took over.
+  if (result.code === 0 && verb === "reinstall" && args[0] !== "--cask") await context.run(brew, ["link", "--overwrite", ...args], { quiet: true });
+  return result;
 }
 
 async function installRelease(context: PackageContext, id: string): Promise<CommandResult> {
@@ -297,13 +393,12 @@ export async function installRecipe(context: PackageContext, id: string): Promis
   }
   if (id === "nerd-font") return installGeistFont(context);
   const state = await inspectSoftware(context, id);
+  if (state.route === "brew-upgrade" && state.packageName) return brewPackageCommand(context, "upgrade", state.packageName);
   if (state.installed) return { code: 0, stdout: `${id} is already healthy`, stderr: "" };
   if (state.reason && !state.route) return { code: 1, stdout: "", stderr: state.reason };
-  if (state.route === "brew" && state.packageName) {
-    const [flag, ...parts] = state.packageName.startsWith("--") ? state.packageName.split(" ") : ["", state.packageName];
-    return context.run(context.host.packageManagers.brew!, ["install", ...(flag ? [flag] : []), ...parts], { env: { HOMEBREW_NO_AUTO_UPDATE: "1" } });
-  }
-  if (state.route === "apt" && state.packageName) return installApt(context, state.packageName);
+  if (state.route === "brew" && state.packageName) return brewPackageCommand(context, "install", state.packageName);
+  if (state.route === "brew-reinstall" && state.packageName) return brewPackageCommand(context, "reinstall", state.packageName);
+  if ((state.route === "apt" || state.route === "apt-reinstall") && state.packageName) return installApt(context, state.packageName, state.route === "apt-reinstall");
   if (state.route === "upstream-script" && id === "starship") return downloadScript(context, "https://starship.rs/install.sh", ["-y", "-b", join(context.home, ".local/bin")]);
   if (state.route === "upstream-script" && id === "zoxide") return downloadScript(context, "https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh", []);
   if (state.route === "git-checkout" && (id === "fzf" || id === "zsh-abbr")) return installCheckout(context, id);
@@ -318,32 +413,62 @@ function hasExactFace(familyField: string, styleField: string, expected: string)
   return names.includes(family) && styleField.split(/[;,]/).some(value => value.trim().toLowerCase() === expected.toLowerCase());
 }
 
-async function inspectMacFonts(context: PackageContext): Promise<{ complete: boolean; detail: string }> {
-  const profiler = commandFor(context.host, "system_profiler");
-  if (!profiler) return { complete: false, detail: "system_profiler is unavailable" };
-  const result = await context.run(profiler, ["SPFontsDataType", "-json"], { quiet: true });
-  if (result.code !== 0) return { complete: false, detail: "system_profiler font enumeration failed" };
-  try {
-    const data = JSON.parse(result.stdout) as Record<string, unknown>;
-    const entries = data.SPFontsDataType;
-    const found = new Set<string>();
-    const walk = async (value: unknown): Promise<void> => {
-      if (Array.isArray(value)) { await Promise.all(value.map(walk)); return; }
-      if (!value || typeof value !== "object") return;
-      const entry = value as Record<string, unknown>;
-      if (Array.isArray(entry.typefaces)) for (const face of entry.typefaces) {
-        if (!face || typeof face !== "object") continue;
-        const item = face as Record<string, unknown>;
-        const style = String(item.style ?? "");
-        if (hasExactFace(String(item.family ?? ""), style, style) && item.enabled === "yes" && item.valid === "yes" && typeof entry.path === "string") {
-          try { await stat(String(entry.path)); found.add(style); } catch { /* missing font file */ }
-        }
-      }
-      await Promise.all(Object.values(entry).map(walk));
-    };
-    await walk(entries);
-    return { complete: styles.every(style => [...found].some(foundStyle => foundStyle.toLowerCase() === style.toLowerCase())), detail: `valid faces: ${[...found].join(", ")}` };
-  } catch { return { complete: false, detail: "system_profiler returned invalid JSON" }; }
+// Reads family/face names straight from the font files through CoreText, then asks the font
+// service which faces it has activated. A file in ~/Library/Fonts is not enough: when that
+// directory is created after fontd started (a fresh account), fontd never activates its fonts and
+// Alacritty falls back to Menlo. `register` activates the files persistently for the user.
+const coreTextFaces = `ObjC.import("AppKit"); ObjC.import("CoreText");
+function run(argv) {
+  const [mode, family, ...paths] = argv;
+  if (mode === "register") {
+    // 2 = kCTFontManagerScopeUser: persistent for this user. JXA bridges the named constant as a string.
+    for (const path of paths) $.CTFontManagerRegisterFontsForURL($.NSURL.fileURLWithPath(path), 2, null);
+    return "";
+  }
+  const out = [];
+  for (const path of paths) {
+    const descriptors = $.CTFontManagerCreateFontDescriptorsFromURL($.NSURL.fileURLWithPath(path));
+    if (!descriptors) continue;
+    const list = ObjC.castRefToObject(descriptors);
+    for (let index = 0; index < list.count; index++) {
+      const descriptor = list.objectAtIndex(index);
+      out.push("file\\t" + ObjC.unwrap(descriptor.objectForKey("NSFontFamilyAttribute")) + "\\t" + ObjC.unwrap(descriptor.objectForKey("NSFontFaceAttribute")) + "\\t" + path);
+    }
+  }
+  for (const member of ObjC.deepUnwrap($.NSFontManager.sharedFontManager.availableMembersOfFontFamily(family)) ?? []) out.push("active\\t" + family + "\\t" + member[1]);
+  return out.join("\\n");
+}`;
+interface MacFontState { complete: boolean; active: boolean; files: string[]; detail: string }
+async function inspectMacFonts(context: PackageContext): Promise<MacFontState> {
+  const osascript = commandFor(context.host, "osascript");
+  if (!osascript) return { complete: false, active: false, files: [], detail: "osascript is unavailable" };
+  const files: string[] = [];
+  for (const directory of [join(context.host.home, "Library/Fonts"), "/Library/Fonts"]) {
+    for (const name of await readdir(directory).catch(() => [] as string[])) if (/^GeistMono.*\.(?:otf|ttf)$/i.test(name)) files.push(join(directory, name));
+  }
+  if (!files.length) return { complete: false, active: false, files, detail: "no GeistMono font files in ~/Library/Fonts or /Library/Fonts" };
+  const result = await context.run(osascript, ["-l", "JavaScript", "-e", coreTextFaces, "inspect", family, ...files], { quiet: true });
+  if (result.code !== 0) return { complete: false, active: false, files: [], detail: "CoreText font inspection failed" };
+  const found = new Set<string>(), active = new Set<string>(), familyFiles: string[] = [];
+  for (const line of result.stdout.split("\n")) {
+    const [kind = "", families = "", face = "", path = ""] = line.trim().split("\t");
+    const match = styles.find(style => hasExactFace(families, face, style));
+    if (kind === "file" && families.split(/[;,]/).some(name => name.trim() === family)) familyFiles.push(path);
+    if (match) (kind === "active" ? active : found).add(match);
+  }
+  const complete = styles.every(style => found.has(style));
+  const inactive = styles.filter(style => !active.has(style));
+  return { complete, active: complete && !inactive.length, files: familyFiles, detail: complete ? `macOS has not activated the installed ${inactive.join(", ")} faces` : `valid faces: ${[...found].join(", ")}` };
+}
+
+/** Activate installed font files for the current user, then confirm macOS serves every required face. */
+async function activateMacFonts(context: PackageContext): Promise<CommandResult> {
+  const state = await inspectMacFonts(context);
+  if (!state.active && state.complete) await context.run(commandFor(context.host, "osascript")!, ["-l", "JavaScript", "-e", coreTextFaces, "register", family, ...state.files], { quiet: true });
+  const verified = state.active ? state : await inspectMacFonts(context);
+  return verified.active
+    ? { code: 0, stdout: "Installed and activated Geist Mono Nerd Font Mono faces", stderr: "" }
+    : { code: 1, stdout: "", stderr: `Geist Mono Nerd Font Mono could not be activated (${verified.detail}); open the files in Font Book to install them.` };
 }
 
 async function inspectLinuxFonts(context: PackageContext): Promise<{ complete: boolean; detail: string }> {
@@ -372,12 +497,12 @@ async function inspectFontconfigRoute(context: PackageContext): Promise<Software
   const apt = context.host.packageManagers.apt;
   if (apt) {
     const installed = await aptInstalled(context, "fontconfig");
-    if (installed) return { installed: false, healthy: false, reason: "fontconfig is installed but its required commands are unavailable; repair PATH or the package." };
+    if (installed) return { installed: false, healthy: false, reason: "fontconfig is installed but its required commands are unavailable; reinstalling it.", route: "apt-fontconfig", packageName: "--reinstall fontconfig" };
     if (await aptCandidate(context, "fontconfig")) return { installed: false, healthy: false, route: "apt-fontconfig", packageName: "fontconfig" };
   }
   const brew = context.host.packageManagers.brew;
   if (brew) {
-    if (await brewInstalled(context, "fontconfig")) return { installed: false, healthy: false, reason: "fontconfig is installed by Homebrew but its required commands are unavailable; repair PATH." };
+    if (await brewInstalled(context, "fontconfig")) return { installed: false, healthy: false, reason: "fontconfig is installed by Homebrew but its required commands are unavailable; reinstalling it.", route: "brew-fontconfig", packageName: "fontconfig" };
     const info = await context.run(brew, ["info", "--json=v2", "fontconfig"], { quiet: true });
     if (info.code === 0) try {
       const data = JSON.parse(info.stdout) as { formulae?: Array<{ name?: string }> };
@@ -389,35 +514,40 @@ async function inspectFontconfigRoute(context: PackageContext): Promise<Software
 
 export async function inspectGeistFont(context: PackageContext): Promise<SoftwareState> {
   if (context.host.platform === "linux" && ["fc-list", "fc-match", "fc-cache"].some(name => !commandFor(context.host, name))) return inspectFontconfigRoute(context);
-  const result = context.host.platform === "darwin" ? await inspectMacFonts(context) : await inspectLinuxFonts(context);
-  if (result.complete) return { installed: true, healthy: true };
   if (context.host.platform === "darwin") {
+    const result = await inspectMacFonts(context);
+    if (result.active) return { installed: true, healthy: true };
+    if (result.complete) return { installed: false, healthy: false, route: "font-activate", reason: result.detail };
     const brew = context.host.packageManagers.brew;
     if (brew) {
-      const installed = await brewInstalled(context, "font-geist-mono-nerd-font");
-      if (installed) return { installed: false, healthy: false, reason: `Installed Geist Mono Nerd Font cask has incomplete/invalid faces (${result.detail}); repair it in Font Book or reinstall the cask manually.` };
+      if (await brewInstalled(context, "font-geist-mono-nerd-font")) return { installed: false, healthy: false, route: "brew-reinstall", packageName: "--cask font-geist-mono-nerd-font", reason: `Installed Geist Mono Nerd Font cask has incomplete faces (${result.detail}); reinstalling it.` };
       if (await brewCaskEnabled(context, "font-geist-mono-nerd-font")) return { installed: false, healthy: false, route: "brew", packageName: "--cask font-geist-mono-nerd-font" };
     }
     if (!commandFor(context.host, "curl") || !commandFor(context.host, "tar")) return { installed: false, healthy: false, reason: "curl and tar are required for the official Geist Mono Nerd Font release route." };
     return { installed: false, healthy: false, route: "font-download", reason: result.detail };
   }
+  const result = await inspectLinuxFonts(context);
+  if (result.complete) return { installed: true, healthy: true };
   return { installed: false, healthy: false, route: "font-download", reason: result.detail };
 }
 
 export async function installGeistFont(context: PackageContext): Promise<CommandResult> {
   const state = await inspectGeistFont(context);
   if (state.installed) return { code: 0, stdout: "Exact Geist Mono Nerd Font faces already installed", stderr: "" };
-  if (state.reason?.includes("repair it in Font Book")) return { code: 1, stdout: "", stderr: state.reason };
   if (state.route === "apt-fontconfig" || state.route === "brew-fontconfig") {
     const installed = state.route === "apt-fontconfig"
-      ? await installApt(context, "fontconfig")
-      : await context.run(context.host.packageManagers.brew!, ["install", "fontconfig"], { env: { HOMEBREW_NO_AUTO_UPDATE: "1" } });
+      ? await installApt(context, state.packageName ?? "fontconfig")
+      : await brewPackageCommand(context, await brewInstalled(context, "fontconfig") ? "reinstall" : "install", "fontconfig");
     if (installed.code !== 0) return installed;
     await context.refreshHost?.();
     const refreshed = await inspectGeistFont(context);
     if (refreshed.route === "apt-fontconfig" || refreshed.route === "brew-fontconfig" || !refreshed.route) return { code: 1, stdout: "", stderr: refreshed.reason ?? "Fontconfig commands remain unavailable after installation." };
   }
-  if (state.route === "brew") return context.run(context.host.packageManagers.brew!, ["install", "--cask", "font-geist-mono-nerd-font"], { env: { HOMEBREW_NO_AUTO_UPDATE: "1" } });
+  if (state.route === "font-activate") return activateMacFonts(context);
+  if ((state.route === "brew" || state.route === "brew-reinstall") && state.packageName) {
+    const installed = await brewPackageCommand(context, state.route === "brew" ? "install" : "reinstall", state.packageName);
+    return installed.code === 0 ? activateMacFonts(context) : installed;
+  }
   const curl = commandFor(context.host, "curl");
   const tar = commandFor(context.host, "tar");
   const fcList = commandFor(context.host, "fc-list");
@@ -459,6 +589,10 @@ export async function installGeistFont(context: PackageContext): Promise<Command
       const backup = change.existing ? await context.backupUserFile!(change.destination) : undefined;
       placed.push({ destination: change.destination, ...(backup ? { backup } : {}) });
       await copyFile(change.source, change.destination);
+    }
+    if (context.host.platform === "darwin") {
+      const activated = await activateMacFonts(context);
+      if (activated.code !== 0) throw new Error(activated.stderr);
     }
     if (changes.length && context.host.platform === "linux") {
       const cache = await context.run(fcCache!, ["-f", target]);

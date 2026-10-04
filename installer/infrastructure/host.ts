@@ -36,7 +36,7 @@ export async function inspectHost(repositoryRoot: string, env = process.env): Pr
   if (cpu !== "x64" && cpu !== "arm64") throw new Error(`Unsupported CPU architecture: ${cpu}`);
   const extra = [join(homedir(), ".volta/bin"), join(homedir(), ".local/bin"), join(homedir(), ".bun/bin"), join(homedir(), ".cargo/bin"), "/opt/homebrew/bin", "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin"];
   const searchPath = [...extra, env.PATH ?? ""].join(delimiter);
-  const names = ["zsh", "git", "tmux", "bun", "brew", "apt-get", "dpkg-query", "apt-cache", "curl", "bash", "tar", "unzip", "fc-list", "fc-match", "fc-cache", "system_profiler", "sw_vers", "xcode-select", "clang", "make", "tic", "gzip", "codesign", "cargo", "rustc", "scdoc", "dconf", "gsettings", "gnome-extensions", "keyd", "keyd.rvaiya", "starship", "zoxide", "fzf", "bat", "batcat", "eza", "fd", "fdfind", "rg", "thefuck", "volta", "alacritty", "aerospace", "omp", "tmuxscope", "zsh-abbr", "sudo", "systemctl", "infocmp", "ditto", "xcodebuild"];
+  const names = ["zsh", "git", "tmux", "bun", "brew", "apt-get", "dpkg-query", "apt-cache", "curl", "bash", "tar", "unzip", "fc-list", "fc-match", "fc-cache", "sw_vers", "xcode-select", "clang", "make", "tic", "gzip", "codesign", "cargo", "rustc", "rustup", "scdoc", "dconf", "gsettings", "gnome-extensions", "keyd", "keyd.rvaiya", "starship", "zoxide", "fzf", "bat", "batcat", "eza", "fd", "fdfind", "rg", "thefuck", "volta", "alacritty", "aerospace", "omp", "tmuxscope", "zsh-abbr", "sudo", "systemctl", "infocmp", "ditto", "xcodebuild", "osascript"];
   const executables = await discoverExecutables(names, searchPath);
   if (rawPlatform === "linux") {
     for (const path of ["/home/linuxbrew/.linuxbrew/bin/brew", join(homedir(), ".linuxbrew/bin/brew")]) {

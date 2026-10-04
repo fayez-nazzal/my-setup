@@ -21,8 +21,11 @@ Requires:
   switched to zsh yet (see [`../zsh`](../zsh)).
 - The **GeistMono Nerd Font Mono** family — select `Geist Mono Nerd Font` in
   the interactive installer to install its Regular, Bold, and Italic faces.
-  It is not required for Alacritty to start, only to render the configured
-  family correctly.
+  On macOS the installer also checks that the font service has activated
+  them and registers them for your user when it hasn't (a `~/Library/Fonts`
+  created after login is not picked up on its own). Without the font,
+  Alacritty still starts but warns `Unable to load specified font … falling
+  back to Menlo`; open a new Alacritty window after the installer runs.
 - The `Insert`-key bindings assume [`keyd`](../keyd/README.md)'s
   `[command:C]` layer is installed and emitting `Ctrl+Insert`/`Shift+Insert`
   for Cmd+C/Cmd+V — without keyd, those bindings are simply unreachable

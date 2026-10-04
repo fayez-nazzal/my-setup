@@ -5,7 +5,7 @@ find_aerospace() {
   local candidate
   candidate="$(command -v aerospace 2>/dev/null || true)"
   if [ -n "$candidate" ] && [ -x "$candidate" ]; then printf '%s\n' "$candidate"; return 0; fi
-  for candidate in /opt/homebrew/bin/aerospace /usr/local/bin/aerospace; do
+  for candidate in "$HOME/.local/bin/aerospace" /opt/homebrew/bin/aerospace /usr/local/bin/aerospace; do
     if [ -x "$candidate" ]; then printf '%s\n' "$candidate"; return 0; fi
   done
   return 1

@@ -28,7 +28,7 @@ followUpMode: all
 modelRoles:
   writer: anthropic/claude-opus-5-5:high
   web: web/perplexity
-  default: openai-codex/gpt-6-luna:high
+  default: anthropic/claude-opus-5-5:high
   tiny: camel-stream/auto:medium
   commit: openai-codex/gpt-6-luna:high
   task: openai-codex/gpt-6-luna:medium

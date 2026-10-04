@@ -9,9 +9,9 @@ import { UserFileLinks, assertOmpAgentDirectoryIsReal, migrateGitIdentity, migra
 import { inspectHost } from "./infrastructure/host";
 import { inspectPackage, installRecipe } from "./infrastructure/packages";
 import type { SoftwareState } from "./infrastructure/packages";
-import { installAlacrittySource, installTmuxPlugins, installTmuxscope, installZshAbbr } from "./infrastructure/tools";
+import { installAerospaceSource, installAlacrittySource, installTmuxPlugins, installTmuxscope, installZshAbbr } from "./infrastructure/tools";
 import { applyGnome, installKeyd, installKeydFromSource } from "./infrastructure/desktop";
-import { commands } from "./infrastructure/commands";
+import { commands, ensureSudo } from "./infrastructure/commands";
 
 const args = process.argv.slice(2);
 if (args.some((arg) => arg !== "--dry-run")) { console.error(`Unsupported argument: ${args.find((arg) => arg !== "--dry-run")}`); process.exit(2); }
@@ -33,6 +33,12 @@ const recipeContext = { host: recipeHost, home, repoRoot: root, run: commands.ru
 const availability = new Map<ComponentId, ComponentAvailability>();
 const softwareIds: ComponentId[] = ["zsh","git","tmux","starship","zoxide","fzf","bat","eza","fd","ripgrep","thefuck","volta","node-lts","alacritty","nerd-font","aerospace","linux-desktop","keyd"];
 const softwareStates = new Map<ComponentId, SoftwareState>();
+// Refresh Homebrew's index first so missing tools install, and outdated ones are detected, at their latest versions.
+if (!dryRun && host.packageManagers.brew) {
+  console.log("Updating Homebrew…");
+  if ((await commands.run(host.packageManagers.brew, ["update", "--quiet"], { quiet: true })).code !== 0) console.log("Homebrew update failed; continuing with the current package index.");
+}
+console.log("Inspecting installed software…");
 for (const id of softwareIds) {
   try { softwareStates.set(id, await inspectPackage(recipeContext, id)); }
   catch (error) { softwareStates.set(id, { installed:false, healthy:false, reason:error instanceof Error ? error.message : String(error) }); }
@@ -43,10 +49,11 @@ for (const item of catalog) {
   let installed = false;
   const state = softwareStates.get(item.id);
   if (state) { installed = state.installed; if (!state.installed && !state.route) { enabled = false; reason = state.reason ?? "No supported installation route is available."; } }
+  const outdated = Boolean(state?.installed && state.outdated && state.route);
   if (item.id === "zsh-abbr" || item.id === "tmuxscope" || item.id === "tmux-plugins") { enabled = item.platforms.includes(host.platform); }
   if (item.id === "gnome-apply") { enabled = host.platform === "linux" && host.gnome.active && Boolean(host.gnome.dbusAddress) && Boolean(host.gnome.dconf); if (!enabled) reason = "Active GNOME session, DBus address, and dconf are required."; }
   if (item.id === "keyd-config") enabled = host.platform === "linux";
-  availability.set(item.id, { enabled, reason, installed });
+  availability.set(item.id, { enabled, reason, installed, outdated });
 }
 for (const item of catalog) {
   const missing = item.requires.find((dependency) => !availability.get(dependency)?.installed && !availability.get(dependency)?.enabled);
@@ -74,7 +81,7 @@ const draw = () => {
     const option = availability.get(item.id)!;
     const marker = option.enabled && state.selected.has(item.id) ? "[x]" : "[ ]";
     componentRows[index] = rendered.length;
-    rendered.push(`${index === state.cursor ? ">" : " "} ${marker} ${item.label}${option.enabled ? "" : ` (disabled: ${option.reason})`}${option.installed ? " (installed)" : ""}`);
+    rendered.push(`${index === state.cursor ? ">" : " "} ${marker} ${item.label}${option.enabled ? "" : ` (disabled: ${option.reason})`}${option.outdated ? " (installed, update available)" : option.installed ? " (installed)" : ""}`);
   });
   const activeRow = componentRows[state.cursor] ?? 0;
   const start = Math.max(0, Math.min(rendered.length - availableHeight, activeRow - Math.floor(availableHeight / 2)));
@@ -111,23 +118,21 @@ if (!state.selected.size) { console.log("Nothing selected."); process.exit(0); }
 const results: ComponentResult[] = [];
 const attentionNotes: string[] = [];
 const selectedSoftware = [...state.selected].filter((id) => softwareStates.has(id));
-const needsSudo = (host.platform === "linux" && selectedSoftware.some((id) => ["apt", "apt-fontconfig"].includes(softwareStates.get(id)?.route ?? "") || (id === "keyd" && !softwareStates.get(id)?.installed))) || state.selected.has("keyd-config");
+const needsSudo = (host.platform === "linux" && selectedSoftware.some((id) => ["apt", "apt-reinstall", "apt-fontconfig"].includes(softwareStates.get(id)?.route ?? "") || (id === "keyd" && !softwareStates.get(id)?.installed))) || state.selected.has("keyd-config");
 let sudoAvailable = true;
-if (!dryRun && needsSudo) sudoAvailable = (await commands.run("sudo", ["-v"])).code === 0;
+if (!dryRun && needsSudo) sudoAvailable = await ensureSudo();
 const executionOrder: ComponentId[] = [];
 const visited = new Set<ComponentId>();
+// Configuration links run after the selected software they configure, so prerequisite checks see the installed tools.
 const visit = (id: ComponentId): void => {
   if (visited.has(id) || !state.selected.has(id)) return;
   visited.add(id);
   const item = catalog.find((entry) => entry.id === id);
   for (const dependency of item?.requires ?? []) visit(dependency);
+  for (const prerequisite of configurationPrerequisites[id] ?? []) if (catalog.some((entry) => entry.id === prerequisite)) visit(prerequisite as ComponentId);
   executionOrder.push(id);
 };
 for (const item of catalog) visit(item.id);
-if (state.selected.has("keyd") && state.selected.has("keyd-config")) {
-  executionOrder.splice(executionOrder.indexOf("keyd"), 1);
-  executionOrder.splice(executionOrder.indexOf("keyd-config"), 0, "keyd");
-}
 for (const id of executionOrder) {
   try {
     if (dryRun) {
@@ -162,7 +167,7 @@ for (const id of executionOrder) {
         }
       }
       if (id === "tmux-config" && messages.includes(".tmux.conf")) {
-        const tmux = host.executables.get("tmux");
+        const tmux = recipeContext.host.executables.get("tmux");
         if (tmux && (await commands.run(tmux, ["list-sessions"])).code === 0) {
           const reloaded = await commands.run(tmux, ["source-file", join(home, ".tmux.conf")]);
           if (reloaded.code !== 0) attentionNotes.push("The tmux configuration link changed, but the active tmux server could not reload it.");
@@ -179,13 +184,14 @@ for (const id of executionOrder) {
       const recipe = id === "zsh-abbr" ? installZshAbbr : id === "tmuxscope" ? installTmuxscope : installTmuxPlugins;
       outcome = await recipe(recipeContext);
     } else if (id === "alacritty" && host.platform === "darwin" && softwareStates.get(id)?.route === "source") outcome = await installAlacrittySource(recipeContext);
+    else if (id === "aerospace" && softwareStates.get(id)?.route === "aerospace-source") outcome = await installAerospaceSource(recipeContext);
     else if (id === "keyd" && softwareStates.get(id)?.route === "keyd-source-build" && !sudoAvailable) outcome = { id, status: "blocked", attention: ["Elevation was declined or unavailable; rerun the keyd build with sudo."] };
     else if (id === "keyd" && softwareStates.get(id)?.route === "keyd-source-build") outcome = await installKeydFromSource(recipeContext);
     else if (id === "keyd-config" && !sudoAvailable) outcome = { id, status: "blocked", attention: ["Elevation was declined or unavailable; manually install the selected /etc/keyd links with sudo."] };
     else if (id === "keyd-config") outcome = await installKeyd(recipeContext);
     else if (id === "gnome-apply") outcome = await applyGnome(recipeContext);
     else {
-      if ((["apt", "apt-fontconfig"].includes(softwareStates.get(id)?.route ?? "") || id === "linux-desktop" || id === "keyd") && !sudoAvailable) outcome = { id, status:"blocked", attention:["Elevation was declined or unavailable; rerun the exact package command with sudo."] };
+      if ((["apt", "apt-reinstall", "apt-fontconfig"].includes(softwareStates.get(id)?.route ?? "") || id === "linux-desktop" || id === "keyd") && !sudoAvailable) outcome = { id, status:"blocked", attention:["Elevation was declined or unavailable; rerun the exact package command with sudo."] };
       else {
         const result = await installRecipe(recipeContext, id);
         if (result.code !== 0) outcome = { id, status:"failed", attention:[result.stderr || `${id} failed with exit ${result.code}`] };
@@ -193,8 +199,8 @@ for (const id of executionOrder) {
         else outcome = { id, status:"changed", attention:[] };
       }
     }
+    if (outcome.status === "changed") await refreshHost();
     if (outcome.status === "changed" && softwareStates.has(id)) {
-      await refreshHost();
       const verified = await inspectPackage(recipeContext, id);
       if (!verified.installed) outcome = { id, status:"failed", attention:[verified.reason ?? `${id} did not pass executable or installation verification after its recipe ran.`] };
     }

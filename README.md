@@ -61,9 +61,12 @@ Core, both platforms:
 - git
 
 macOS only:
-- [Homebrew](https://brew.sh/) — optional on macOS, where supported recipes
-  prefer it. The installer asks before bootstrapping it. Linux never
-  bootstraps Homebrew, though an existing Linuxbrew installation is usable.
+- [Homebrew](https://brew.sh/) — supported recipes prefer it. The installer
+  offers to bootstrap it (Enter accepts), which also installs the Xcode
+  command-line tools. Linux never bootstraps Homebrew, though an existing
+  Linuxbrew installation is usable.
+- Full [Xcode](https://apps.apple.com/app/xcode/id497799835) for the AeroSpace
+  source build. Without it the installer falls back to the AeroSpace cask.
 
 Linux/Debian: native package installation is APT-only. The optional Linux
 desktop bundle provides this repository's audio/network/rofi setup:
@@ -98,9 +101,26 @@ is detected before installation, and conflicting user files are retained in
 a private backup directory before links are replaced. `--dry-run` shows the
 selected operations without changing component state; `--help` does not
 bootstrap prerequisites. The installer does not invent identity, secrets, or
-hardware IDs, and does not change the login shell. It reports blocked work
-and remaining prerequisites under "Needs your attention". An AI coding agent
-asked to set this repo up should read [`AGENTS.md`](AGENTS.md) first.
+hardware IDs, and does not change the login shell.
+
+The installer repairs what it can instead of reporting it:
+
+- Files under the repo, `~/.bun`, `~/.cache`, `~/.config`, `~/.local`, and
+  similar tool directories that belong to another user (usually left by an
+  earlier `sudo` run) are given back with `sudo chown -R`.
+- Before inspecting software it runs `brew update`. Homebrew-managed tools that
+  `brew outdated` lists show as "update available" and get upgraded. A
+  Homebrew or APT package whose executable fails its version probe is
+  reinstalled.
+- sudo asks for your password only when a step needs it (APT, `/etc/keyd`, an
+  unwritable `/Applications`, Xcode license/first-launch, ownership repair).
+  The credential is kept fresh for the rest of the run, so long builds don't
+  ask again.
+- Configuration links run after the software they configure, so the
+  missing-executable check sees tools installed in the same run.
+
+What remains goes under "Needs your attention". An AI coding agent asked to
+set this repo up should read [`AGENTS.md`](AGENTS.md) first.
 
 The software list includes **Volta** (installed from the official
 `https://get.volta.sh` script with `--skip-setup` into `~/.volta`, since
@@ -237,8 +257,29 @@ Choose the configuration for your OS.
 
 #### macOS: AeroSpace
 
+The installer builds AeroSpace from the `main` branch with upstream's
+`build-release.sh`. The checkout is a build cache in
+`~/.cache/my-setup/AeroSpace`. The build steps:
+
+- Installs the build prerequisites with Homebrew: bash 5, `swiftly` and the
+  Swift toolchain pinned in `.swift-version`, the Ruby 3.x the docs need,
+  `fish`, and Rust.
+- Accepts the Xcode license and runs first-launch setup when needed (sudo).
+- Creates a self-signed `aerospace-codesign-certificate` code-signing identity
+  in your login keychain once. macOS keeps the Accessibility permission across
+  rebuilds only when the signing identity stays the same. The installer asks
+  for your login keychain password once so `codesign` can use the key without
+  a dialog on every build.
+- Installs `AeroSpace.app` to `/Applications` (replacing the Homebrew cask if
+  it is installed), the CLI to `~/.local/bin/aerospace`, the man pages to
+  `~/.local/share/man`, and the zsh completion to
+  `~/.local/share/zsh/site-functions`, then launches the app.
+
+Rerunning the installer rebuilds AeroSpace only when `main` has moved.
+Without full Xcode, it installs the `nikitabobko/tap/aerospace` cask instead:
+
 ```sh
-brew install --cask aerospace
+brew install --cask nikitabobko/tap/aerospace
 ln -sfn "$HOME/my-setup/.aerospace.toml" "$HOME/.aerospace.toml"
 ```
 

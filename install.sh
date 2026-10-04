@@ -10,10 +10,26 @@ case "$arch" in x86_64|arm64|aarch64) ;; *) printf 'Unsupported CPU architecture
 if [ "$(id -u)" -eq 0 ]; then printf 'Do not run the installer as root.\n' >&2; exit 1; fi
 if [ ! -t 0 ] || [ ! -t 1 ]; then printf 'Interactive installer requires a terminal on stdin and stdout.\n' >&2; exit 1; fi
 prepend_existing() { for candidate in "$HOME/.local/bin" "$HOME/.bun/bin" "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin; do [ ! -d "$candidate" ] || PATH="$candidate:$PATH"; done; }
+# Files left behind by an earlier `sudo` run (for example a root-owned ~/.bun cache) make later
+# user-level installs fail with EACCES. Hand them back to the user before anything else runs.
+repair_ownership() {
+  local uid group dir found=()
+  uid="$(id -u)"; group="$(id -g)"
+  for dir in "$REPO_DIR" "$HOME/.bun" "$HOME/.volta" "$HOME/.cargo" "$HOME/.rustup" "$HOME/.npm" "$HOME/.cache" "$HOME/.config" "$HOME/.local" "$HOME/.tmux" "$HOME/.swiftly" "$HOME/.terminfo" "$HOME/.fzf" "$HOME/.omp" "$HOME/repos/tools" "$HOME/Library/Fonts" "$HOME/Applications"; do
+    [ -e "$dir" ] || continue
+    [ -z "$(find "$dir" -xdev ! -user "$uid" -print -quit 2>/dev/null)" ] || found+=("$dir")
+  done
+  [ "${#found[@]}" -gt 0 ] || return 0
+  printf 'Found files owned by another user (usually from an earlier sudo run) in:\n'; printf '  %s\n' "${found[@]}"
+  if [ "$DRY_RUN" = --dry-run ]; then printf 'Dry run: ownership left unchanged.\n'; return 0; fi
+  printf 'Restoring your ownership; sudo may ask for your password.\n'
+  sudo chown -R "$uid:$group" "${found[@]}" || printf 'Ownership repair failed; installs into these paths may fail with permission errors.\n' >&2
+}
+repair_ownership
 prepend_existing; export PATH
 if [ "$DRY_RUN" != --dry-run ] && [ "$os" = Darwin ] && ! command -v brew >/dev/null 2>&1; then
-  printf 'Homebrew not found. Install Homebrew? [y/N] '; read -r answer || answer=n
-  if [[ "$answer" =~ ^[Yy]$ ]]; then
+  printf 'Homebrew not found. Install Homebrew? [Y/n] '; read -r answer || answer=y
+  if [[ ! "$answer" =~ ^[Nn] ]]; then
     if ! command -v curl >/dev/null 2>&1; then printf 'Homebrew bootstrap requires curl; Homebrew-dependent choices will remain unavailable.\n' >&2
     else
       tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
@@ -35,8 +51,8 @@ bun_ok=false
 if [ -n "$bun_path" ]; then version="$("$bun_path" --version 2>/dev/null || true)"; if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]] && { (( BASH_REMATCH[1] > 1 )) || (( BASH_REMATCH[1] == 1 && BASH_REMATCH[2] >= 3 )); }; then bun_ok=true; fi; fi
 if [ "$bun_ok" != true ]; then
   if [ "$DRY_RUN" = --dry-run ]; then printf 'Bun >=1.3.0 is required for --dry-run; bootstrap is disabled.\n' >&2; exit 1; fi
-  printf 'Bun >=1.3.0 is required. Install or upgrade Bun? [y/N] '; read -r answer || answer=n
-  if [[ ! "$answer" =~ ^[Yy]$ ]]; then printf 'Install Bun >=1.3.0, then rerun %s.\n' "$0" >&2; exit 1; fi
+  printf 'Bun >=1.3.0 is required. Install or upgrade Bun? [Y/n] '; read -r answer || answer=y
+  if [[ "$answer" =~ ^[Nn] ]]; then printf 'Install Bun >=1.3.0, then rerun %s.\n' "$0" >&2; exit 1; fi
   if command -v brew >/dev/null 2>&1; then
     if [ -n "$bun_path" ] && brew list --formula --versions bun >/dev/null 2>&1; then brew upgrade oven-sh/bun/bun || { printf 'Consented Bun upgrade failed.\n' >&2; exit 1; }
     else brew install oven-sh/bun/bun || { printf 'Bun installation failed.\n' >&2; exit 1; }; fi
@@ -57,8 +73,8 @@ import_ok=false
 if [ -n "$lock_hash" ] && [ -d "$REPO_DIR/installer/node_modules/@opentui/core" ] && (cd "$REPO_DIR/installer" && "$bun_path" -e 'await import("@opentui/core")' >/dev/null 2>&1); then import_ok=true; fi
 if [ "$import_ok" != true ] || [ ! -f "$hash_file" ] || [ "$(cat "$hash_file" 2>/dev/null || true)" != "$lock_hash" ]; then
   if [ "$DRY_RUN" = --dry-run ]; then printf 'Installer dependencies are missing or stale; --dry-run does not bootstrap them. Run %s normally first.\n' "$0" >&2; exit 1; fi
-  printf 'Installer dependencies are missing, broken, or out of date. Run Bun dependency setup? [y/N] '; read -r answer || answer=n
-  if [[ ! "$answer" =~ ^[Yy]$ ]]; then printf 'Run bun install in %s/installer, then rerun.\n' "$REPO_DIR" >&2; exit 1; fi
+  printf 'Installer dependencies are missing, broken, or out of date. Run Bun dependency setup? [Y/n] '; read -r answer || answer=y
+  if [[ "$answer" =~ ^[Nn] ]]; then printf 'Run bun install in %s/installer, then rerun.\n' "$REPO_DIR" >&2; exit 1; fi
   if [ -f "$lock" ]; then (cd "$REPO_DIR/installer" && "$bun_path" install --frozen-lockfile) || { printf 'Installer dependency installation failed.\n' >&2; exit 1; }
   else (cd "$REPO_DIR/installer" && "$bun_path" install) || { printf 'Installer dependency installation failed.\n' >&2; exit 1; }; fi
   (cd "$REPO_DIR/installer" && "$bun_path" -e 'await import("@opentui/core")') >/dev/null 2>&1 || { printf 'OpenTUI import failed after dependency setup.\n' >&2; exit 1; }
