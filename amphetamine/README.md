@@ -24,7 +24,9 @@ file would leave Amphetamine with no settings at all.
 
 ## If the settings step is blocked
 
-Amphetamine keeps its settings in a protected app folder. The first time,
-macOS asks whether your terminal may access data from other apps. Allow it,
-or turn on Full Disk Access for the terminal in System Settings → Privacy &
-Security, then rerun.
+Amphetamine keeps its settings in a protected app folder. Before configuration,
+the installer requests Automation access to System Events and Amphetamine,
+then checks app-data access. If needed it opens Privacy & Security and waits
+for you to allow the terminal's app-data access or enable Full Disk Access.
+You can skip; configuration stays blocked without partial changes.
+macOS may require restarting the terminal and rerunning after a new grant.

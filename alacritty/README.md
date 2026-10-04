@@ -1,38 +1,53 @@
 # Alacritty
 
-Every Alacritty window opens in the shared tmux session `main`, however it is
-launched: Dock, Spotlight, `open -a Alacritty`, AeroSpace's Alt+Enter, GNOME's
-shortcut or `xdg-terminal-exec`, or `alacritty` from a shell. This lives in
-`terminal.shell` in [`alacritty.toml`](alacritty.toml), so no `$PATH` wrapper is
-involved. `alacritty -e CMD` replaces that shell and runs `CMD` without tmux.
+The default shell entrypoint opens one Alacritty window backed by a shared
+tmux session, regardless of launch route: Dock, Spotlight, `open -a Alacritty`,
+AeroSpace's Alt+Enter, GNOME's shortcut or `xdg-terminal-exec`, or `alacritty`
+from a shell. A private advisory lock serializes default shells. The first
+keeps the lock while attached to tmux; a concurrent default launch activates
+Alacritty on macOS and exits its otherwise-empty shell, allowing that
+temporary window to close. This lock is not a process-count heuristic.
+`alacritty -e CMD` replaces the configured shell, so explicit commands retain
+their own windows and do not participate.
 
-The shell runs a login zsh first, so the tmux server inherits the full login
-environment, then attaches with `tmux new-session -A -s main`. tmux is looked
-up on that `$PATH`, then in `/opt/homebrew/bin`, `/usr/local/bin`,
-`/home/linuxbrew/.linuxbrew/bin`, and `/usr/bin`. `TMUX` is cleared first, so
-a window opened from inside a tmux pane attaches instead of refusing to nest.
-Without tmux the window prints a notice and starts a plain login zsh.
+The configured login zsh sources
+`~/.local/bin/my-setup-alacritty-shell` (linked from `bin/` by the installer),
+so the tmux server inherits the full login environment. The helper locks
+`~/.cache/my-setup/alacritty-default.lock` and requires its directory and file
+to be owned by the current user with private permissions. It uses the zsh
+`zsh/system` advisory `flock` builtin; if that module is unavailable or the
+lock cannot be safely obtained, the helper reports the problem and refuses
+to launch another default session. tmux is looked up on `$PATH`, then in
+`/opt/homebrew/bin`, `/usr/local/bin`, `/home/linuxbrew/.linuxbrew/bin`, and
+`/usr/bin`. Without tmux the window prints a notice and starts a plain login
+zsh.
 
-Detaching (`prefix d`) or ending the session closes the window. A window
-attaches session `main` while it exists and creates it otherwise; tmuxscope's
-hook (see [`../tmux`](../tmux)) renames sessions after their directory scope,
-so a later window usually starts a fresh `main`. Switch sessions inside tmux
-(`prefix s`).
+The default tmux session is found by its `@my_setup_default_alacritty` session
+option, not its name. This remains stable when tmuxscope renames the session
+to a directory scope; on first use the helper adopts the historical `main`
+session if present, otherwise it creates and marks one. Switch sessions
+inside tmux (`prefix s`).
+
+The AeroSpace helper already focuses the existing Alacritty window before
+launching the app when none exists. On macOS, concurrent default shell
+launches activate Alacritty using `open -a`, without an Automation grant. On Linux the extra shell exits
+without killing a window; explicit `-e` commands are never closed by this
+guard.
 
 ## Install
 
-Select **Alacritty configuration** in `./install.sh`. It links
-`alacritty.toml` into `~/.config/alacritty/` and removes the
-`~/.local/bin/alacritty` wrapper link earlier versions of this repository
-created (only while it still points at this repository). Alacritty reloads the
-file automatically; already-open windows keep their shell, so open a new
-window to get tmux.
+Select **Alacritty configuration** in `./install.sh`. It links the settings
+and shell helper, and removes the old `~/.local/bin/alacritty` wrapper only
+while it still points at this repository. Existing windows keep their old
+shell; finish their work and close them before using the new default-window
+policy. The installer never closes your existing work.
 
 By hand:
 
 ```sh
-mkdir -p "$HOME/.config/alacritty"
+mkdir -p "$HOME/.config/alacritty" "$HOME/.local/bin"
 ln -sfn "$HOME/my-setup/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
+ln -sfn "$HOME/my-setup/bin/my-setup-alacritty-shell" "$HOME/.local/bin/my-setup-alacritty-shell"
 ```
 
 Requires:

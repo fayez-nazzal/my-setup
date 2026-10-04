@@ -13,6 +13,9 @@ import type { SoftwareState } from "./infrastructure/packages";
 import { amphetamineApp, appIds, appSudoRoutes, inspectApp, installApp, opSshSignPath } from "./infrastructure/apps";
 import { configureGitSigning, currentSigningMethod, ensureGhAuth, gitConfigTarget, signingItems, signingKeyPath } from "./infrastructure/github";
 import { ensureOpSession } from "./infrastructure/onepassword";
+import { configureJavaHome, inspectRuntime, installRuntime, runtimeIds, runtimeSudoRoutes } from "./infrastructure/runtimes";
+import { configureXcode, inspectXcode } from "./infrastructure/xcode";
+import { prepareMacPermissions } from "./infrastructure/permissions";
 import { githubToolsScript, installAerospaceSource, installAlacrittySource, installGithubToolsCron, installTmuxPlugins, installZshAbbr, syncGithubTools } from "./infrastructure/tools";
 import { amphetamineSettings, applyAmphetamine, applyGnome, applyMacDefaults, installKeyd, installKeydFromSource, macDefaultWriteArgs, macDefaults } from "./infrastructure/desktop";
 import { commands, ensureSudo } from "./infrastructure/commands";
@@ -35,12 +38,21 @@ const refreshHost = async () => {
 };
 const recipeContext = { host: recipeHost, home, repoRoot: root, run: commands.run.bind(commands), ensureLink: fileLinks.ensureLink.bind(fileLinks), backupUserFile: fileLinks.backup.bind(fileLinks), refreshHost };
 const availability = new Map<ComponentId, ComponentAvailability>();
-const softwareIds: ComponentId[] = ["zsh","git","tmux","starship","zoxide","fzf","bat","eza","fd","ripgrep","thefuck","killport","volta","node-lts","alacritty","nerd-font","1password-cli","1password","gh","obsidian","aerospace","google-chrome","orbstack","amphetamine","linux-desktop","keyd"];
+const softwareIds: ComponentId[] = ["zsh","git","tmux","starship","zoxide","fzf","bat","eza","fd","ripgrep","thefuck","killport","volta","node-lts","aws-cli","corretto21","alacritty","nerd-font","1password-cli","1password","gh","obsidian","aerospace","google-chrome","orbstack","amphetamine","linux-desktop","keyd"];
 const softwareStates = new Map<ComponentId, SoftwareState>();
-const inspect = (id: ComponentId) => appIds.has(id) ? inspectApp(recipeContext, id) : inspectPackage(recipeContext, id);
-const sudoRoutes = new Set([...packageSudoRoutes, ...appSudoRoutes]);
+const inspect = (id: ComponentId) => runtimeIds.has(id) ? inspectRuntime(recipeContext, id) : appIds.has(id) ? inspectApp(recipeContext, id) : inspectPackage(recipeContext, id);
+const sudoRoutes = new Set([...packageSudoRoutes, ...appSudoRoutes, ...runtimeSudoRoutes]);
 const headless = (id: ComponentId) => host.platform === "linux" && !host.graphical && desktopOnly.has(id);
 const headlessReason = "This Linux host is headless (no display, desktop session, or graphical target); desktop-only.";
+// Direct `bun run cli.ts` must not bypass the macOS bootstrap prerequisite either.
+if (host.platform === "darwin" && !dryRun && !(await inspectXcode(recipeContext)).installed) {
+  const xcode = await configureXcode(recipeContext);
+  if (xcode.status === "blocked" || xcode.status === "failed") {
+    console.error(`Full Xcode is required before macOS setup: ${xcode.attention.join("; ")}`);
+    process.exit(1);
+  }
+  await refreshHost();
+}
 // Refresh Homebrew's index first so missing tools install, and outdated ones are detected, at their latest versions.
 if (!dryRun && host.packageManagers.brew) {
   console.log("Updating Homebrew…");
@@ -62,6 +74,10 @@ for (const item of catalog) {
   if (item.id === "zsh-abbr" || item.id === "github-tools" || item.id === "github-tools-cron" || item.id === "tmux-plugins") { enabled = item.platforms.includes(host.platform); }
   if (item.id === "gnome-apply") { enabled = host.platform === "linux" && host.gnome.active && Boolean(host.gnome.dbusAddress) && Boolean(host.gnome.dconf); if (!enabled) reason = "Active GNOME session, DBus address, and dconf are required."; }
   if (item.id === "keyd-config") enabled = host.platform === "linux";
+  if (item.id === "xcode" && host.platform === "darwin") {
+    const xcode = await inspectXcode(recipeContext);
+    installed = xcode.installed;
+  }
   if (headless(item.id)) { enabled = false; reason = headlessReason; }
   availability.set(item.id, { enabled, reason, installed, outdated });
 }
@@ -127,6 +143,7 @@ if (!state.selected.size) { console.log("Nothing selected."); process.exit(0); }
 
 const results: ComponentResult[] = [];
 const attentionNotes: string[] = [];
+const permissionBlocks = dryRun ? new Map<ComponentId, string>() : await prepareMacPermissions(recipeContext, state.selected);
 const selectedSoftware = [...state.selected].filter((id) => softwareStates.has(id));
 const needsSudo = (selectedSoftware.some((id) => sudoRoutes.has(softwareStates.get(id)?.route ?? "") || (host.platform === "linux" && id === "keyd" && !softwareStates.get(id)?.installed))) || state.selected.has("keyd-config") || (host.platform === "linux" && state.selected.has("github-tools-cron") && !host.executables.has("crontab"));
 let sudoAvailable = true;
@@ -143,8 +160,19 @@ const visit = (id: ComponentId): void => {
   for (const earlier of runAfter[id] ?? []) visit(earlier);
   executionOrder.push(id);
 };
+// Ask account/integration approvals as soon as their apps/CLIs are ready, before long builds.
+for (const early of ["xcode", "1password", "1password-cli", "1password-signin", "gh", "gh-auth", "git-signing"] as const) visit(early);
 for (const item of catalog) visit(item.id);
 for (const id of executionOrder) {
+  if (permissionBlocks.has(id)) {
+    console.log(`${id}: blocked`); results.push({ id, status: "blocked", attention: [permissionBlocks.get(id)!] }); continue;
+  }
+  if (!dryRun && (id === "amphetamine-config" || id === "aerospace-config")) {
+    const denied = await prepareMacPermissions(recipeContext, new Set([id]));
+    if (denied.has(id)) {
+      console.log(`${id}: blocked`); results.push({ id, status: "blocked", attention: [denied.get(id)!] }); continue;
+    }
+  }
   try {
     if (dryRun) {
       const paths = configurationLinks[id];
@@ -152,6 +180,8 @@ for (const id of executionOrder) {
       if (paths) console.log(`${id}: ${[...paths.map(([source,target]) => `link ${source} -> ${target}`), ...retired].join(", ")}`);
       else if (id === "macos-defaults") console.log(`${id}: where different, ${macDefaults.map(setting => `defaults ${macDefaultWriteArgs(setting).join(" ")}`).join("; ")}`);
       else if (id === "amphetamine-config") console.log(`${id}: where different, ${(await amphetamineSettings(recipeContext)).map(setting => `defaults ${macDefaultWriteArgs(setting).join(" ")}`).join("; ")}; add ${amphetamineApp} to login items; start a session`);
+      else if (id === "xcode") console.log(`${id}: verify full Xcode selection, license, first-launch components, and macOS SDK; offer App Store installation and repair only when needed`);
+      else if (id === "java-home") console.log(`${id}: install the managed zsh login snippet; resolve and verify Corretto 21 JAVA_HOME and put its bin first on PATH`);
       else if (id === "github-tools" || id === "github-tools-cron") {
         const plan = await commands.run(githubToolsScript(root), id === "github-tools" ? ["list"] : ["cron", "show"], { quiet: true });
         console.log(`${id}: ${id === "github-tools" ? "sync" : "crontab entry"}\n${plan.stdout.trimEnd().replace(/^/gm, "  ")}`);
@@ -227,6 +257,8 @@ for (const id of executionOrder) {
     else if (id === "gnome-apply") outcome = await applyGnome(recipeContext);
     else if (id === "macos-defaults") outcome = await applyMacDefaults(recipeContext);
     else if (id === "amphetamine-config") outcome = await applyAmphetamine(recipeContext, amphetamineApp);
+    else if (id === "xcode") outcome = await configureXcode(recipeContext);
+    else if (id === "java-home") outcome = await configureJavaHome(recipeContext);
     else if (id === "1password-signin") {
       const session = await ensureOpSession(recipeContext);
       outcome = session.ok ? { id, status: session.changed ? "changed" : "unchanged", attention: [] } : { id, status: "blocked", attention: [session.reason] };
@@ -236,7 +268,7 @@ for (const id of executionOrder) {
     else {
       if ((sudoRoutes.has(softwareStates.get(id)?.route ?? "") || id === "linux-desktop" || id === "keyd") && !sudoAvailable) outcome = { id, status:"blocked", attention:["Elevation was declined or unavailable; rerun the exact package command with sudo."] };
       else {
-        const result = appIds.has(id) ? await installApp(recipeContext, id) : await installRecipe(recipeContext, id);
+        const result = runtimeIds.has(id) ? await installRuntime(recipeContext, id) : appIds.has(id) ? await installApp(recipeContext, id) : await installRecipe(recipeContext, id);
         if (result.code !== 0) outcome = { id, status:"failed", attention:[result.stderr || `${id} failed with exit ${result.code}`] };
         else if (result.stdout.includes("already")) outcome = { id, status:"unchanged", attention:[] };
         else outcome = { id, status:"changed", attention:[] };

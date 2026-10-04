@@ -25,6 +25,11 @@ repair_ownership() {
   printf 'Restoring your ownership; sudo may ask for your password.\n'
   sudo chown -R "$uid:$group" "${found[@]}" || printf 'Ownership repair failed; installs into these paths may fail with permission errors.\n' >&2
 }
+if [ "$os" = Darwin ]; then
+  xcode_bootstrap="$REPO_DIR/installer/infrastructure/xcode-bootstrap.sh"
+  if [ "$DRY_RUN" = --dry-run ]; then /bin/bash "$xcode_bootstrap" dry-run
+  else /bin/bash "$xcode_bootstrap" configure || exit 1; fi
+fi
 repair_ownership
 prepend_existing; export PATH
 if [ "$DRY_RUN" != --dry-run ] && [ "$os" = Darwin ] && ! command -v brew >/dev/null 2>&1; then

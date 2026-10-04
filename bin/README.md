@@ -12,6 +12,11 @@ ln -sfn "$HOME/my-setup/bin/aerospace-alacritty" "$HOME/.local/bin/aerospace-ala
   existing Alacritty window, otherwise opens Alacritty (`open -b org.alacritty`),
   whose configuration starts the tmux session (see
   [`../alacritty/README.md`](../alacritty/README.md)).
+
+- **`my-setup-alacritty-shell`** — default Alacritty shell entrypoint. Link it
+  to `~/.local/bin/my-setup-alacritty-shell`; Alacritty's configured login
+  shell sources it to serialize default tmux launches and reuse the marked
+  default session (see [`../alacritty/README.md`](../alacritty/README.md)).
 - **`styleguard`** — provider-agnostic AI-content-detection + personal-style
   CLI: detect-scores a draft against Winston AI, rewrites low-scoring
   sentences with `gpt-6-astra` via the OpenAI Responses API, and enforces a

@@ -1,0 +1,108 @@
+#!/bin/zsh
+# Default Alacritty shell entrypoint. Keep the lock for the lifetime of tmux;
+# explicit Alacritty -e commands bypass terminal.shell and never enter here.
+
+lock_dir="$HOME/.cache/my-setup"
+lock_file="$lock_dir/alacritty-default.lock"
+
+if [[ -L "$HOME/.cache" || ( -e "$HOME/.cache" && ! -d "$HOME/.cache" ) ]]; then
+  print -u2 'Alacritty default-window guard: ~/.cache is not a real directory; refusing to start another default window.'
+  exit 1
+fi
+if [[ ! -d "$HOME/.cache" ]]; then
+  command mkdir -m 700 -- "$HOME/.cache" 2>/dev/null || {
+    print -u2 'Alacritty default-window guard: cannot create ~/.cache; refusing to start another default window.'
+    exit 1
+  }
+fi
+if [[ -L "$lock_dir" || ( -e "$lock_dir" && ! -d "$lock_dir" ) ]]; then
+  print -u2 'Alacritty default-window guard: lock directory is not a real directory; refusing to start another default window.'
+  exit 1
+fi
+if [[ ! -d "$lock_dir" ]]; then
+  command mkdir -m 700 -- "$lock_dir" 2>/dev/null || {
+    print -u2 'Alacritty default-window guard: cannot create lock directory; refusing to start another default window.'
+    exit 1
+  }
+fi
+
+# Ensure the lock and its parent cannot be controlled by another account.
+zmodload zsh/stat 2>/dev/null || {
+  print -u2 'Alacritty default-window guard: zsh/stat is unavailable; refusing to start another default window.'
+  exit 1
+}
+zstat -H cache_stat -- "$HOME/.cache" 2>/dev/null &&
+  zstat -H lock_dir_stat -- "$lock_dir" 2>/dev/null || {
+  print -u2 'Alacritty default-window guard: cannot inspect lock directory; refusing to start another default window.'
+  exit 1
+}
+if (( cache_stat[uid] != EUID || lock_dir_stat[uid] != EUID )) || (( (lock_dir_stat[mode] & 8#77) != 0 )); then
+  print -u2 'Alacritty default-window guard: ~/.cache/my-setup must be owned by this user and private (mode 700); refusing to start another default window.'
+  exit 1
+fi
+
+zmodload zsh/system 2>/dev/null && zsystem supports flock || {
+  print -u2 'Alacritty default-window guard: zsh system flock is unavailable; refusing to start another default window.'
+  exit 1
+}
+if [[ -L "$lock_file" || ( -e "$lock_file" && ! -f "$lock_file" ) ]]; then
+  print -u2 'Alacritty default-window guard: lock file is not a regular file; refusing to start another default window.'
+  exit 1
+fi
+if [[ ! -e "$lock_file" ]]; then
+  ( umask 077; command touch -- "$lock_file" ) 2>/dev/null || {
+    print -u2 'Alacritty default-window guard: cannot create lock file; refusing to start another default window.'
+    exit 1
+  }
+fi
+zstat -H lock_stat -- "$lock_file" 2>/dev/null || {
+  print -u2 'Alacritty default-window guard: cannot inspect lock file; refusing to start another default window.'
+  exit 1
+}
+if (( lock_stat[uid] != EUID || (lock_stat[mode] & 8#77) != 0 )); then
+  print -u2 'Alacritty default-window guard: lock file must be owned by this user and private (mode 600); refusing to start another default window.'
+  exit 1
+fi
+
+if ! zsystem flock -t 0 -f lock_fd "$lock_file" 2>/dev/null; then
+  if [[ "$(uname -s)" == Darwin ]]; then
+    /usr/bin/open -a Alacritty >/dev/null 2>&1 || true
+  fi
+  exit 0
+fi
+
+# Locate tmux after login startup. The marker survives tmuxscope renaming a
+# session; the name check adopts the previous default session on first run.
+unset TMUX TMUX_PANE
+tmux_bin=${commands[tmux]-}
+for candidate in /opt/homebrew/bin/tmux /usr/local/bin/tmux /home/linuxbrew/.linuxbrew/bin/tmux /usr/bin/tmux; do
+  [[ -z $tmux_bin && -x $candidate ]] && tmux_bin=$candidate
+done
+if [[ -z "$tmux_bin" ]]; then
+  print -u2 'tmux not found; starting plain login zsh. Install tmux (./install.sh) for the shared default session.'
+  /bin/zsh -l
+  exit $?
+fi
+
+session_id=""
+while IFS=' ' read -r candidate marked; do
+  if [[ "$marked" == 1 ]]; then
+    session_id=$candidate
+    break
+  fi
+done < <("$tmux_bin" list-sessions -F '#{session_id} #{?@my_setup_default_alacritty,1,0}' 2>/dev/null)
+if [[ -z "$session_id" ]]; then
+  # Adopt the historical default if it remains; otherwise create one session.
+  session_id=$("$tmux_bin" display-message -p -t '=main' '#{session_id}' 2>/dev/null || true)
+  if [[ -z "$session_id" ]]; then
+    session_id=$("$tmux_bin" new-session -d -s main -P -F '#{session_id}' 2>/dev/null) || {
+      print -u2 'Alacritty default-window guard: could not create the default tmux session.'
+      exit 1
+    }
+  fi
+  "$tmux_bin" set-option -t "$session_id" @my_setup_default_alacritty 1 || {
+    print -u2 'Alacritty default-window guard: could not mark the default tmux session.'
+    exit 1
+  }
+fi
+"$tmux_bin" attach-session -t "$session_id"

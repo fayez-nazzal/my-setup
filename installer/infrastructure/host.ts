@@ -39,7 +39,7 @@ export async function inspectHost(repositoryRoot: string, env = process.env): Pr
   const extra = [join(homedir(), ".volta/bin"), join(homedir(), ".local/bin"), join(homedir(), ".bun/bin"), join(homedir(), ".cargo/bin"), "/opt/homebrew/bin", "/usr/local/bin", "/home/linuxbrew/.linuxbrew/bin"];
   const searchPath = [...extra, env.PATH ?? ""].join(delimiter);
   const names = ["zsh", "git", "tmux", "bun", "brew", "apt-get", "dpkg-query", "apt-cache", "curl", "bash", "tar", "unzip", "fc-list", "fc-match", "fc-cache", "sw_vers", "xcode-select", "clang", "make", "tic", "gzip", "codesign", "cargo", "rustc", "rustup", "scdoc", "dconf", "gsettings", "gnome-extensions", "keyd", "keyd.rvaiya", "starship", "zoxide", "fzf", "bat", "batcat", "eza", "fd", "fdfind", "rg", "thefuck", "killport", "volta", "alacritty", "aerospace", "omp", "tmuxscope", "zsh-abbr", "sudo", "systemctl", "infocmp", "ditto", "xcodebuild", "osascript", "defaults", "killall", "crontab", "op", "gh", "obsidian", "gpg", "ssh-keygen", "pkgutil", "installer"];
-  names.push("mas");
+  names.push("mas", "aws", "java", "javac", "readlink", "xcrun");
   const executables = await discoverExecutables(names, searchPath);
   if (rawPlatform === "linux") {
     for (const path of ["/home/linuxbrew/.linuxbrew/bin/brew", join(homedir(), ".linuxbrew/bin/brew")]) {

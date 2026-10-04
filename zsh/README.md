@@ -18,12 +18,18 @@ The installer does not change your login shell. On Linux run
 
 1. `.zshenv` runs in every shell.
 2. `.zprofile` runs in login shells and loads `profile.d/*.zsh`: Homebrew,
-   PATH, and OrbStack when present.
+   PATH, Corretto 21 `JAVA_HOME`, and OrbStack when present.
 3. `.zshrc` runs in interactive shells and loads `rc.d/*.zsh` in name order:
    GPG terminal setup, prompt, tool setup, history, key bindings, aliases,
    completion, and zoxide.
 
 Each file is loaded once, so sourcing again is safe.
+
+The optional `java-home` installer choice requires Amazon Corretto 21 and
+`zsh-config`. Its `profile.d/30-java-home.zsh` finds a Corretto 21 JDK by its
+release metadata, sets `JAVA_HOME`, and prepends its `bin` directory to PATH
+in login shells. It does not modify other JDK installations; no machine-specific
+path is written.
 
 ## Local settings
 
