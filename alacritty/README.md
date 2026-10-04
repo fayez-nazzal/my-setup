@@ -14,10 +14,15 @@ The configured login zsh sources
 `~/.local/bin/my-setup-alacritty-shell` (linked from `bin/` by the installer),
 so the tmux server inherits the full login environment. The helper locks
 `~/.cache/my-setup/alacritty-default.lock` and requires its directory and file
-to be owned by the current user with private permissions. It uses the zsh
-`zsh/system` advisory `flock` builtin; if that module is unavailable or the
-lock cannot be safely obtained, the helper reports the problem and refuses
-to launch another default session. tmux is looked up on `$PATH`, then in
+to be owned by the current user with private permissions. After checking
+ownership, it makes an existing lock directory private (mode `700`): the
+AeroSpace source installer can also create this shared cache directory.
+The installer creates new shared cache directories with mode `700` as well.
+This repairs older installs where mode `755` caused the default shell to
+exit immediately. Symlinked directories and foreign ownership remain errors.
+It uses the zsh `zsh/system` advisory `flock` builtin; if that module is
+unavailable or the lock cannot be safely obtained, the helper reports the
+problem and refuses to launch another default session. tmux is looked up on `$PATH`, then in
 `/opt/homebrew/bin`, `/usr/local/bin`, `/home/linuxbrew/.linuxbrew/bin`, and
 `/usr/bin`. Without tmux the window prints a notice and starts a plain login
 zsh.

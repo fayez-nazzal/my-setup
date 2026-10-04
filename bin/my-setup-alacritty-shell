@@ -36,9 +36,18 @@ zstat -H cache_stat -- "$HOME/.cache" 2>/dev/null &&
   print -u2 'Alacritty default-window guard: cannot inspect lock directory; refusing to start another default window.'
   exit 1
 }
-if (( cache_stat[uid] != EUID || lock_dir_stat[uid] != EUID )) || (( (lock_dir_stat[mode] & 8#77) != 0 )); then
-  print -u2 'Alacritty default-window guard: ~/.cache/my-setup must be owned by this user and private (mode 700); refusing to start another default window.'
+if (( cache_stat[uid] != EUID || lock_dir_stat[uid] != EUID )); then
+  print -u2 'Alacritty default-window guard: ~/.cache and ~/.cache/my-setup must be owned by this user; refusing to start another default window.'
   exit 1
+fi
+
+# Other installer components (AeroSpace's build cache) can create this shared
+# directory with the default umask. Secure it only after checking ownership.
+if (( (lock_dir_stat[mode] & 8#77) != 0 )); then
+  command chmod -- 700 "$lock_dir" 2>/dev/null || {
+    print -u2 'Alacritty default-window guard: cannot make ~/.cache/my-setup private; refusing to start another default window.'
+    exit 1
+  }
 fi
 
 zmodload zsh/system 2>/dev/null && zsystem supports flock || {

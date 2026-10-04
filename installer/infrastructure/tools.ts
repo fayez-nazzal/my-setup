@@ -292,7 +292,7 @@ export async function installAerospaceSource(c: RecipeContext): Promise<ToolResu
     }
   } else {
     await rm(source, { recursive: true, force: true });
-    await mkdir(dirname(source), { recursive: true });
+    await mkdir(dirname(source), { recursive: true, mode: 0o700 });
     const cloned = await run(c, id, git, ["clone", "--quiet", "--depth", "1", "--branch", "main", aerospaceRepository, source]);
     if (cloned.status !== "changed") return cloned;
   }

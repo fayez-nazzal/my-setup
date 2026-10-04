@@ -1,4 +1,5 @@
 alias gl='git log --graph --oneline'
+alias gco='git checkout'
 
 # Reuse the dedicated editor window when running nvim without arguments in tmux.
 nvim() {
