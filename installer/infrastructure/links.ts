@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { constants } from "node:fs";
-import { access, chmod, copyFile, cp, lstat, mkdir, readFile, readdir, readlink, realpath, rename, rm, symlink } from "node:fs/promises";
+import { access, chmod, copyFile, cp, lstat, mkdir, readFile, readdir, readlink, realpath, rename, rm, symlink, unlink } from "node:fs/promises";
 import type { Stats } from "node:fs";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 export type LinkResult = "changed" | "unchanged";
 
 export interface LinkOptions {
@@ -58,6 +58,20 @@ export class UserFileLinks {
       }
       throw new Error(`Could not create link ${dst}${savedAt ? `; original restored from ${savedAt}` : ""}: ${message(error)}`, { cause: error });
     }
+    return "changed";
+  }
+
+  /** Delete a link an earlier install created for a since-removed repository file; anything else at the destination is left alone. */
+  async removeRetiredLink(source: string, destination: string): Promise<LinkResult> {
+    const src = resolve(source);
+    const dst = resolve(destination);
+    const existing = await maybeLstat(dst);
+    if (!existing?.isSymbolicLink()) return "unchanged";
+    const target = resolve(dirname(dst), await readlink(dst));
+    const sourceParent = await realpath(dirname(src)).catch(() => undefined);
+    const owned = target === src || (sourceParent !== undefined && target === resolve(sourceParent, basename(src)));
+    if (!owned) return "unchanged";
+    await unlink(dst);
     return "changed";
   }
 

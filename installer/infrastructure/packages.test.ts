@@ -3,7 +3,7 @@ import { inspectPackage, installRecipe } from "./packages";
 import type { HostFacts } from "./host";
 import type { PackageContext } from "./packages";
 function context(executables: Map<string,string>, response: (command:string,args:readonly string[]) => {code:number;stdout:string;stderr:string}): PackageContext {
-  const host: HostFacts = { platform:"linux", architecture:"x64", home:"/tmp/test-home", repositoryRoot:"/tmp/repo", executables, packageManagers:{} , gnome:{active:false}, macOS:{} };
+  const host: HostFacts = { platform:"linux", architecture:"x64", home:"/tmp/test-home", repositoryRoot:"/tmp/repo", executables, packageManagers:{} , gnome:{active:false}, graphical:true, macOS:{} };
   return { host, home:host.home, repoRoot:host.repositoryRoot, ensureLink:async () => "unchanged", run:async (command,args) => response(command,args) };
 }
 describe("software discovery", () => {
@@ -30,7 +30,7 @@ describe("software discovery", () => {
 type Call = { command: string; args: readonly string[]; env?: Record<string, string> };
 function recorded(executables: Map<string, string>, respond: (command: string, args: readonly string[]) => { code: number; stdout: string; stderr: string }) {
   const calls: Call[] = [];
-  const host: HostFacts = { platform: "linux", architecture: "x64", home: "/tmp/test-home", repositoryRoot: "/tmp/repo", executables, packageManagers: {}, gnome: { active: false }, macOS: {} };
+  const host: HostFacts = { platform: "linux", architecture: "x64", home: "/tmp/test-home", repositoryRoot: "/tmp/repo", executables, packageManagers: {}, gnome: { active: false }, graphical: true, macOS: {} };
   const ctx: PackageContext = { host, home: host.home, repoRoot: host.repositoryRoot, ensureLink: async () => "unchanged", run: async (command, args, options) => { calls.push({ command, args, env: options?.env }); return respond(command, args); } };
   return { ctx, calls };
 }

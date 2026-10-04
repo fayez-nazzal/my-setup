@@ -3,9 +3,10 @@ import { mkdtemp, readFile, readdir, stat, lstat, mkdir, copyFile, rm, rename, c
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import type { HostFacts } from "./host.ts";
+import type { CommandOptions } from "../application/ports";
 
 export interface CommandResult { code: number; stdout: string; stderr: string }
-export type RunCommand = (executable: string, args: readonly string[], options?: { cwd?: string; env?: Record<string, string>; quiet?: boolean }) => Promise<CommandResult>;
+export type RunCommand = (executable: string, args: readonly string[], options?: CommandOptions) => Promise<CommandResult>;
 /** `installed` means a healthy executable exists; `outdated` marks an installed tool whose `route` updates it. */
 export interface SoftwareState { installed: boolean; healthy: boolean; reason?: string; route?: string; packageName?: string; outdated?: boolean }
 export interface RecipeContext {
@@ -18,6 +19,8 @@ export interface RecipeContext {
   refreshHost?(): Promise<void>;
 }
 export type PackageContext = RecipeContext;
+/** Routes that elevate with sudo; the CLI authenticates once before running them. */
+export const packageSudoRoutes: ReadonlySet<string> = new Set(["apt", "apt-reinstall", "apt-fontconfig"]);
 
 const aptNames: Record<string, string> = { fd: "fd-find", ripgrep: "ripgrep", bat: "bat", "linux-desktop": "rofi network-manager network-manager-gnome pulseaudio-utils pipewire pipewire-audio-client-libraries wireplumber" };
 const brewNames: Record<string, string> = { aerospace: "--cask nikitabobko/tap/aerospace", alacritty: "--cask alacritty", nerdFont: "--cask font-geist-mono-nerd-font", zshAbbr: "olets/tap/zsh-abbr" };
@@ -63,7 +66,7 @@ function brewInventory(context: PackageContext, brew: string): Promise<BrewInven
   }
   return inventory;
 }
-async function brewInstalled(context: PackageContext, pkg: string): Promise<boolean | undefined> {
+export async function brewInstalled(context: PackageContext, pkg: string): Promise<boolean | undefined> {
   const brew = context.host.packageManagers.brew;
   if (!brew) return undefined;
   return (await brewInventory(context, brew)).installed.has(brewShortName(pkg));
@@ -75,22 +78,27 @@ async function brewOutdated(context: PackageContext, pkg: string): Promise<boole
   return inventory.installed.has(brewShortName(pkg)) && inventory.outdated.has(brewShortName(pkg));
 }
 /** Healthy Homebrew-managed software that Homebrew reports outdated gets an upgrade route. */
-async function healthyState(context: PackageContext, brewName: string | undefined): Promise<SoftwareState> {
+export async function healthyState(context: PackageContext, brewName: string | undefined): Promise<SoftwareState> {
   if (brewName && await brewOutdated(context, brewName.replace(/^--cask /, ""))) return { installed: true, healthy: true, outdated: true, route: "brew-upgrade", packageName: brewName };
   return { installed: true, healthy: true };
 }
-async function brewCaskEnabled(context: PackageContext, pkg: string): Promise<boolean> {
+export async function brewCaskEnabled(context: PackageContext, pkg: string): Promise<boolean> {
   const brew = context.host.packageManagers.brew;
   if (!brew) return false;
   const info = await context.run(brew, ["info", "--json=v2", "--cask", pkg], { quiet: true });
   if (info.code !== 0) return false;
   try {
-    const data = JSON.parse(info.stdout) as { casks?: Array<{ token?: string; disabled?: unknown; depends_on?: { macos?: string | string[]; arch?: string | string[] } }> };
+    const data = JSON.parse(info.stdout) as { casks?: Array<{ token?: string; disabled?: unknown; depends_on?: { macos?: unknown; arch?: string | string[] } }> };
     const cask = data.casks?.find(item => item.token === pkg) ?? data.casks?.[0];
     if (!cask || cask.disabled) return false;
     const currentVersion = (context.host.macOS.version ?? "").split(".").map(Number);
+    // Homebrew emits `depends_on.macos` as a string, a list, or an operator map such as {">=": ["12"]}.
     const requirements = cask.depends_on?.macos;
-    for (const requirement of requirements ? Array.isArray(requirements) ? requirements : [requirements] : []) {
+    const requirementList = typeof requirements === "string" ? [requirements]
+      : Array.isArray(requirements) ? requirements.map(String)
+      : requirements && typeof requirements === "object" ? Object.entries(requirements).flatMap(([operator, values]) => (Array.isArray(values) ? values : [values]).map(value => `${operator} ${String(value)}`))
+      : [];
+    for (const requirement of requirementList) {
       const normalized = String(requirement).toLowerCase();
       const codenames: Record<string, number[]> = { high_sierra: [10, 13], mojave: [10, 14], catalina: [10, 15], big_sur: [11], monterey: [12], ventura: [13], sonoma: [14], sequoia: [15], tahoe: [26] };
       const codename = normalized.match(/:([a-z_]+)/)?.[1];
@@ -117,13 +125,13 @@ async function brewCaskEnabled(context: PackageContext, pkg: string): Promise<bo
     return true;
   } catch { return false; }
 }
-async function aptInstalled(context: PackageContext, pkg: string): Promise<boolean | undefined> {
+export async function aptInstalled(context: PackageContext, pkg: string): Promise<boolean | undefined> {
   const dpkg = context.host.packageManagers.dpkgQuery;
   if (!dpkg) return undefined;
   const result = await context.run(dpkg, ["-W", "-f=${Status}", pkg], { quiet: true });
   return result.code === 0 && result.stdout.includes("install ok installed");
 }
-async function aptCandidate(context: PackageContext, pkg: string): Promise<boolean> {
+export async function aptCandidate(context: PackageContext, pkg: string): Promise<boolean> {
   const cache = commandFor(context.host, "apt-cache");
   if (!cache) return false;
   const result = await context.run(cache, ["policy", pkg], { quiet: true });
@@ -238,23 +246,21 @@ export async function inspectSoftware(context: PackageContext, id: string): Prom
     if (states.some(Boolean)) return { installed: false, healthy: false, reason: `${pkg} is installed by APT but its executable is unhealthy; reinstalling it.`, route: "apt-reinstall", packageName: pkg };
     const candidates = await Promise.all(names.map(name => aptCandidate(context, name)));
     if (candidates.every(Boolean)) return { installed: false, healthy: false, route: "apt", packageName: pkg };
-    if (["starship", "zoxide", "fzf", "bat", "eza", "fd", "ripgrep"].includes(id)) {
-      if (id === "bat" || id === "eza") return { installed: false, healthy: false, route: "github-release", reason: `GNU ${context.host.architecture === "x64" ? "x86_64" : "aarch64"}-unknown-linux-gnu release archive` };
+    if (["starship", "zoxide", "fzf", "bat", "eza", "fd", "ripgrep", "killport"].includes(id)) {
+      if (id in linuxReleases) return { installed: false, healthy: false, route: "github-release", reason: `Latest ${context.host.architecture === "x64" ? "x86_64" : "aarch64"} Linux GNU release archive` };
       if (id === "starship" || id === "zoxide") return { installed: false, healthy: false, route: "upstream-script" };
       if (id === "fzf") return { installed: false, healthy: false, route: "git-checkout" };
     }
     if (id === "keyd") return { installed: false, healthy: false, route: "keyd-source-build", reason: "No APT keyd candidate; build the latest stable upstream release with APT build prerequisites." };
     return { installed: false, healthy: false, reason: `APT candidate unavailable: ${names.filter((_, i) => !candidates[i]).join(", ")}` };
   }
-  if (["starship", "zoxide", "fzf", "bat", "eza", "fd", "ripgrep"].includes(id) && context.host.platform === "linux") {
-    const target = context.host.architecture === "x64" ? "x86_64-unknown-linux-gnu" : "aarch64-unknown-linux-gnu";
-    if (["bat", "eza"].includes(id)) return { installed: false, healthy: false, route: "github-release", reason: `GNU ${target} release archive` };
+  if (["starship", "zoxide", "fzf", "bat", "eza", "fd", "ripgrep", "killport"].includes(id) && context.host.platform === "linux") {
+    if (id in linuxReleases) return { installed: false, healthy: false, route: "github-release", reason: `Latest ${context.host.architecture === "x64" ? "x86_64" : "aarch64"} Linux GNU release archive` };
     if (id === "starship") return { installed: false, healthy: false, route: "upstream-script" };
     if (id === "zoxide") return { installed: false, healthy: false, route: "upstream-script" };
     if (id === "fzf") return { installed: false, healthy: false, route: "git-checkout" };
   }
   if (id === "zsh-abbr") return { installed: false, healthy: false, route: brew ? "brew" : "git-checkout", packageName: "olets/tap/zsh-abbr" };
-  if (id === "tmuxscope") return { installed: false, healthy: false, route: "source-build" };
   return { installed: false, healthy: false, reason: "No supported installation route is available." };
 }
 
@@ -287,7 +293,7 @@ async function installCheckout(context: PackageContext, id: string): Promise<Com
   return { code: 0, stdout: `${id} checkout installed`, stderr: "" };
 }
 
-async function installApt(context: PackageContext, names: string, reinstall = false): Promise<CommandResult> {
+export async function installApt(context: PackageContext, names: string, reinstall = false): Promise<CommandResult> {
   const apt = context.host.packageManagers.apt;
   return apt ? context.run("sudo", [apt, "install", "-y", ...(reinstall ? ["--reinstall"] : []), ...names.split(" ")]) : { code: 1, stdout: "", stderr: "APT is unavailable" };
 }
@@ -303,57 +309,72 @@ export async function brewPackageCommand(context: PackageContext, verb: "install
   return result;
 }
 
+/** GitHub release archives for Linux GNU hosts; `asset` receives the CPU name (x86_64 or aarch64). */
+const linuxReleases: Record<string, { repo: string; asset: (cpu: string) => string }> = {
+  bat: { repo: "sharkdp/bat", asset: cpu => `^bat-.+-${cpu}-unknown-linux-gnu\\.tar\\.gz$` },
+  eza: { repo: "eza-community/eza", asset: cpu => `^eza_${cpu}-unknown-linux-gnu\\.tar\\.gz$` },
+  killport: { repo: "jkfran/killport", asset: cpu => `^killport-${cpu}-linux-gnu\\.tar\\.gz$` },
+};
+
 async function installRelease(context: PackageContext, id: string): Promise<CommandResult> {
   const curl = commandFor(context.host, "curl"), tar = commandFor(context.host, "tar");
   if (!curl || !tar) return { code: 1, stdout: "", stderr: "curl and tar are required for GNU release installation" };
-  const target = context.host.architecture === "x64" ? "x86_64-unknown-linux-gnu" : "aarch64-unknown-linux-gnu";
-  const repo = id === "bat" ? "sharkdp/bat" : "eza-community/eza";
+  const release = linuxReleases[id];
+  if (!release) return { code: 1, stdout: "", stderr: `No GitHub release route for ${id}` };
+  const cpu = context.host.architecture === "x64" ? "x86_64" : "aarch64";
+  const repo = release.repo;
   const directory = await mkdtemp(join(tmpdir(), "setup-release-"));
   try {
     const response = await context.run(curl, ["-fsSL", `https://api.github.com/repos/${repo}/releases/latest`], { quiet: true });
     if (response.code !== 0) return response;
     const metadata = JSON.parse(response.stdout) as { assets?: Array<{ name?: string; browser_download_url?: string }> };
-    const pattern = id === "bat" ? `^bat-.+-${target}\\.tar\\.gz$` : `^eza_${target}\\.tar\\.gz$`;
+    const pattern = release.asset(cpu);
     const asset = metadata.assets?.find(item => item.name && new RegExp(pattern).test(item.name) && item.browser_download_url);
-    if (!asset?.name || !asset.browser_download_url) throw new Error(`No GNU ${target} ${id} release asset`);
+    if (!asset?.name || !asset.browser_download_url) throw new Error(`No Linux GNU ${cpu} ${id} release asset`);
     const archive = join(directory, asset.name);
     const fetched = await context.run(curl, ["-fsSL", "-o", archive, asset.browser_download_url]);
     if (fetched.code !== 0) return fetched;
     const unpacked = join(directory, "unpacked"); await mkdir(unpacked);
     const extracted = await context.run(tar, ["-xzf", archive, "-C", unpacked]);
     if (extracted.code !== 0) return extracted;
-    const executable = id === "bat" ? "bat" : "eza";
+    const executable = id;
     let binary: string | undefined;
     for (const entry of await readdir(unpacked, { withFileTypes: true })) if (entry.isDirectory()) {
       try { await stat(join(unpacked, entry.name, executable)); binary = join(unpacked, entry.name, executable); break; } catch { /* continue */ }
     }
     if (!binary) throw new Error(`Archive contains no ${executable} binary`);
-    const binDirectory = join(context.home, ".local/bin");
-    const destination = join(binDirectory, executable);
-    await mkdir(binDirectory, { recursive: true });
-    const staged = `${destination}.stage-${process.pid}-${randomBytes(5).toString("hex")}`;
-    let backup: string | undefined;
-    try {
-      await copyFile(binary, staged);
-      await chmod(staged, 0o755);
-      const probe = await context.run(staged, ["--version"], { quiet: true });
-      if (probe.code !== 0) throw new Error(`${executable} release failed its version probe`);
-      if (await lstat(destination).then(() => true).catch(() => false)) {
-        if (!context.backupUserFile) throw new Error(`Cannot replace ${destination}; user-file backup support is unavailable.`);
-        backup = await context.backupUserFile(destination);
-      }
-      await rename(staged, destination);
-    } catch (error) {
-      await rm(staged, { force: true }).catch(() => undefined);
-      if (backup) {
-        try { await rename(backup, destination); }
-        catch (restoreError) { throw new Error(`Could not place ${executable}; original remains at ${backup}; restoration failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`); }
-      }
-      throw error;
-    }
+    await placeUserExecutable(context, binary, executable);
     return { code: 0, stdout: `${id} installed and verified`, stderr: "" };
   } catch (error) { return { code: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error) }; }
   finally { await rm(directory, { recursive: true, force: true }); }
+}
+
+/** Stage a downloaded binary as ~/.local/bin/<name>, probe it, then swap it in; a replaced file is kept in the backup tree. */
+export async function placeUserExecutable(context: PackageContext, binary: string, name: string): Promise<string> {
+  const binDirectory = join(context.home, ".local/bin");
+  const destination = join(binDirectory, name);
+  await mkdir(binDirectory, { recursive: true });
+  const staged = `${destination}.stage-${process.pid}-${randomBytes(5).toString("hex")}`;
+  let backup: string | undefined;
+  try {
+    await copyFile(binary, staged);
+    await chmod(staged, 0o755);
+    const probe = await context.run(staged, ["--version"], { quiet: true });
+    if (probe.code !== 0) throw new Error(`${name} release failed its version probe`);
+    if (await lstat(destination).then(() => true).catch(() => false)) {
+      if (!context.backupUserFile) throw new Error(`Cannot replace ${destination}; user-file backup support is unavailable.`);
+      backup = await context.backupUserFile(destination);
+    }
+    await rename(staged, destination);
+    return destination;
+  } catch (error) {
+    await rm(staged, { force: true }).catch(() => undefined);
+    if (backup) {
+      try { await rename(backup, destination); }
+      catch (restoreError) { throw new Error(`Could not place ${name}; original remains at ${backup}; restoration failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`); }
+    }
+    throw error;
+  }
 }
 
 export async function inspectPackage(context: PackageContext, id: string): Promise<SoftwareState> {
@@ -402,7 +423,7 @@ export async function installRecipe(context: PackageContext, id: string): Promis
   if (state.route === "upstream-script" && id === "starship") return downloadScript(context, "https://starship.rs/install.sh", ["-y", "-b", join(context.home, ".local/bin")]);
   if (state.route === "upstream-script" && id === "zoxide") return downloadScript(context, "https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh", []);
   if (state.route === "git-checkout" && (id === "fzf" || id === "zsh-abbr")) return installCheckout(context, id);
-  if (state.route === "github-release" && (id === "bat" || id === "eza")) return installRelease(context, id);
+  if (state.route === "github-release" && id in linuxReleases) return installRelease(context, id);
   return { code: 1, stdout: "", stderr: state.reason ?? `Recipe for ${id} requires its dedicated source adapter` };
 }
 

@@ -1,6 +1,23 @@
+# Every window opens in the shared tmux session "main", however Alacritty is
+# started: Dock, Spotlight, `open -a Alacritty`, AeroSpace, GNOME shortcuts,
+# xdg-terminal-exec, or `alacritty` from a shell. `alacritty -e CMD` replaces
+# this program and runs CMD without tmux. A login zsh runs first so the tmux
+# server inherits the full login environment (Homebrew, Volta, ~/.local/bin);
+# the fixed fallbacks cover GUI launches whose PATH lacks Homebrew. TMUX is
+# cleared so a window opened from inside a tmux pane still attaches instead of
+# refusing to nest. Without tmux the window falls back to a plain zsh.
 [terminal.shell]
 program = "/bin/zsh"
-args = ["-l"]
+args = ["-l", "-c", '''
+unset TMUX TMUX_PANE
+tmux_bin=${commands[tmux]-}
+for candidate in /opt/homebrew/bin/tmux /usr/local/bin/tmux /home/linuxbrew/.linuxbrew/bin/tmux /usr/bin/tmux; do
+  [[ -z $tmux_bin && -x $candidate ]] && tmux_bin=$candidate
+done
+[[ -n $tmux_bin ]] && exec $tmux_bin new-session -A -s main
+print -u2 'tmux not found; starting plain zsh. Install tmux (./install.sh) for the shared "main" session.'
+exec /bin/zsh -l
+''']
 
 [font]
 size = 11.0

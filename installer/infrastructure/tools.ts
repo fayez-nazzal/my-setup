@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, copyFile, chmod, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { access, copyFile, chmod, mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { aerospaceApp, aerospaceRepository, brewPackageCommand, fullXcodeDeveloperDir, latestGithubRelease } from "./packages";
@@ -54,46 +54,45 @@ export async function installZshAbbr(c: RecipeContext): Promise<ToolResult> {
   return result;
 }
 
-export async function installTmuxscope(c: RecipeContext): Promise<ToolResult> {
-  const dir = join(c.home, "repos/tools/tmuxscope");
-  const dist = join(dir, "dist/tmuxscope");
-  const userBin = join(c.home, ".local/bin/tmuxscope");
-  const git = executable(c, "git");
-  // A tmuxscope installed some other way is left alone; the managed checkout is kept current.
-  if (executable(c, "tmuxscope") && !await exists(join(dir, ".git"))) return ok("tmuxscope", "unchanged");
-  let updated = false;
-  if (await exists(dir)) {
-    const stat = await lstat(dir);
-    if (!stat.isDirectory()) return ok("tmuxscope", "blocked", `${dir} exists and is not a directory; move it aside manually.`);
-    if (git && await exists(join(dir, ".git"))) {
-      const branch = await c.run(git, ["-C", dir, "rev-parse", "--abbrev-ref", "HEAD"], { quiet: true });
-      const dirty = await c.run(git, ["-C", dir, "status", "--porcelain", "--untracked-files=no"], { quiet: true });
-      // Only fast-forward a clean main checkout so local work is never touched.
-      if (branch.stdout.trim() === "main" && dirty.code === 0 && !dirty.stdout.trim()) {
-        const before = await c.run(git, ["-C", dir, "rev-parse", "HEAD"], { quiet: true });
-        await c.run(git, ["-C", dir, "pull", "--quiet", "--ff-only", "origin", "main"], { quiet: true });
-        updated = (await c.run(git, ["-C", dir, "rev-parse", "HEAD"], { quiet: true })).stdout !== before.stdout;
-      }
-    }
-  } else {
-    if (!git) return ok("tmuxscope", "blocked", "tmuxscope needs git to clone its source checkout.");
-    await mkdir(join(c.home, "repos/tools"), { recursive: true });
-    const cloned = await run(c, "tmuxscope", git, ["clone", "--quiet", "--single-branch", "--branch", "main", "https://github.com/fayez-nazzal/tmuxscope.git", dir]);
-    if (cloned.status !== "changed") return cloned;
-  }
-  let distHealthy = !updated && await executableFile(dist);
-  if (distHealthy) distHealthy = (await c.run(dist, ["--version"], { quiet: true })).code === 0;
-  if (!distHealthy) {
-    if (!executable(c, "bun")) return ok("tmuxscope", "blocked", "Bun is required to build tmuxscope.");
-    const install = await run(c, "tmuxscope", executable(c, "bun")!, ["install"], { cwd: dir });
-    if (install.status !== "changed") return install;
-    const build = await run(c, "tmuxscope", executable(c, "bun")!, ["run", "build"], { cwd: dir });
-    if (build.status !== "changed") return build;
-  }
-  if (!await executableFile(dist) || (await c.run(dist, ["--version"])).code !== 0) return ok("tmuxscope", "failed", "tmuxscope build output is missing or failed its version probe.");
+/** tools/sync.sh owns the GitHub tools list (tools/tools.conf); the installer and cron both run it. */
+export const githubToolsScript = (repoRoot: string) => join(repoRoot, "tools/sync.sh");
+
+export async function syncGithubTools(c: RecipeContext): Promise<ToolResult> {
+  const script = githubToolsScript(c.repoRoot);
   await mkdir(join(c.home, ".local/bin"), { recursive: true });
-  const linked = await c.ensureLink(dist, userBin);
-  return ok("tmuxscope", linked);
+  const linked = await c.ensureLink(script, join(c.home, ".local/bin/my-setup-tools"));
+  const result = await c.run(script, ["sync"]);
+  const lines = result.stdout.split("\n");
+  const attention = lines.filter(line => line.startsWith("attention: ")).map(line => line.slice("attention: ".length));
+  if (result.code !== 0) {
+    const failed = lines.flatMap(line => /^([\w.-]+): failed/.exec(line)?.[1] ?? []);
+    return ok("github-tools", "failed", ...attention, `GitHub tools failed: ${failed.join(", ") || "see output above"}; fix the cause, then run my-setup-tools.`);
+  }
+  const summaries = lines.filter(line => /^[\w.-]+: /.test(line) && !line.startsWith("attention: ") && !line.endsWith(": building…"));
+  const changed = linked === "changed" || summaries.some(line => !/^[\w.-]+: unchanged/.test(line));
+  return ok("github-tools", changed ? "changed" : "unchanged", ...attention);
+}
+
+export async function installGithubToolsCron(c: RecipeContext): Promise<ToolResult> {
+  const apt = c.host.packageManagers.apt;
+  const systemctl = executable(c, "systemctl");
+  if (!executable(c, "crontab")) {
+    if (c.host.platform !== "linux" || !apt) return ok("github-tools-cron", "blocked", "crontab is unavailable; install cron, then rerun.");
+    if (!await ensureSudo()) return ok("github-tools-cron", "blocked", "Installing cron needs sudo; run sudo apt-get install cron, then rerun.");
+    const installed = await run(c, "github-tools-cron", "sudo", [apt, "install", "-y", "cron"]);
+    if (installed.status !== "changed") return installed;
+    if (systemctl) await c.run("sudo", [systemctl, "enable", "--now", "cron"]);
+    await c.refreshHost?.();
+  }
+  const result = await c.run(githubToolsScript(c.repoRoot), ["cron", "install"], { quiet: true });
+  if (result.code !== 0) return ok("github-tools-cron", "failed", `Could not install the crontab entry: ${(result.stderr || result.stdout).trim()}`);
+  const attention: string[] = [];
+  // Debian names the service cron, Fedora crond; a crontab entry is inert without the daemon.
+  if (c.host.platform === "linux" && systemctl) {
+    const active = await Promise.all(["cron", "crond"].map(service => c.run(systemctl, ["is-active", "--quiet", service], { quiet: true })));
+    if (active.every(state => state.code !== 0)) attention.push("The cron daemon is not running; start it with sudo systemctl enable --now cron.");
+  }
+  return ok("github-tools-cron", result.stdout.includes("cron: installed") ? "changed" : "unchanged", ...attention);
 }
 
 const conf = (path: string) => {

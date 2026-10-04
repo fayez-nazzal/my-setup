@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Start Session At Launch</key>
+	<true/>
+	<key>Start Session On Wake</key>
+	<true/>
+	<key>Hide Dock Icon</key>
+	<true/>
+	<key>Show Welcome Window</key>
+	<false/>
+</dict>
+</plist>

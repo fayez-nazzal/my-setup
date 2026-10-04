@@ -22,5 +22,5 @@ EOF
 if [ -n "$window" ]; then
   "$aerospace" focus --window-id "$window" || { printf 'AeroSpace could not focus Alacritty window %s.\n' "$window" >&2; exit 1; }
 else
-  exec "$HOME/.local/bin/alacritty"
+  exec /usr/bin/open -b org.alacritty
 fi

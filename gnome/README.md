@@ -18,8 +18,8 @@ Lock as the fullscreen toggle.
 - `Command+Space` → `Super+Space` through keyd → Vicinae's launcher, for
   searching apps and opening clipboard history.
 - `Alt+D` → rofi `drun` as a lightweight app-launcher fallback.
-- `Alt+Enter` → the repository's Alacritty wrapper, using its persistent
-  tmux `main` session. Each invocation can open a separate Alacritty window.
+- `Alt+Enter` → Alacritty, whose configuration attaches the persistent tmux
+  `main` session. Each invocation can open a separate Alacritty window.
   GNOME's terminal setting delegates to `xdg-terminal-exec`, and
   `xdg-terminals.list` selects `Alacritty.desktop`.
 - `Alt+Shift+Insert` → lock screen.

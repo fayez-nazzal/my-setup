@@ -1,4 +1,4 @@
-import { lstat, readFile, readlink } from "node:fs/promises";
+import { lstat, readdir, readFile, readlink } from "node:fs/promises";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -148,4 +148,162 @@ export async function applyGnome(c: RecipeContext): Promise<ToolResult> {
   }
   if (unconfirmed.length) return result("gnome-apply", "failed", `GNOME settings did not verify after apply: ${unconfirmed.join(", ")}.`);
   return result("gnome-apply", "changed", "Vicinae binary and extension setup are external prerequisites; none were changed.");
+}
+
+export interface MacDefault {
+  domain: string;
+  key: string;
+  value: boolean | number | string;
+  /** Process that must restart to load the value; it relaunches itself. */
+  restart?: "Dock" | "SystemUIServer";
+  /** What still has to happen after the restart for the value to apply everywhere. */
+  followUp?: string;
+}
+
+const relaunchApps = "Quit and reopen running apps (or log out) so global window settings reach them.";
+/** AeroSpace's documented macOS recommendations (guide + goodies), plus this setup's Dock preferences. */
+export const macDefaults: readonly MacDefault[] = [
+  // Guide, "Displays have separate Spaces": off is more stable for AeroSpace focus and performance.
+  { domain: "com.apple.spaces", key: "spans-displays", value: true, restart: "SystemUIServer", followUp: "Log out and back in to finish turning off Displays have separate Spaces." },
+  // Guide, "A note on mission control": group windows by application so Mission Control stays usable.
+  { domain: "com.apple.dock", key: "expose-group-apps", value: true, restart: "Dock" },
+  // Goodies: disable window opening animations.
+  { domain: "NSGlobalDomain", key: "NSAutomaticWindowAnimationsEnabled", value: false, followUp: relaunchApps },
+  // Goodies: move windows with Ctrl+Cmd dragging anywhere inside them.
+  { domain: "NSGlobalDomain", key: "NSWindowShouldDragOnGesture", value: true, followUp: relaunchApps },
+  // Guide: a bottom, auto-hidden Dock minimizes the sliver of windows on hidden workspaces.
+  { domain: "com.apple.dock", key: "orientation", value: "bottom", restart: "Dock" },
+  { domain: "com.apple.dock", key: "autohide", value: true, restart: "Dock" },
+  // Reveal only after the pointer rests at the edge for a second, not on every pass.
+  { domain: "com.apple.dock", key: "autohide-delay", value: 1.0, restart: "Dock" },
+  // Desktop & Dock > Animate opening applications: off.
+  { domain: "com.apple.dock", key: "launchanim", value: false, restart: "Dock" },
+];
+
+/** Compare `defaults read` output with a desired value; booleans print as 1/0 and floats without trailing zeros. */
+export function macDefaultMatches(setting: MacDefault, output: string): boolean {
+  const current = output.trim();
+  if (typeof setting.value === "boolean") return current === (setting.value ? "1" : "0");
+  if (typeof setting.value === "number") return current !== "" && Number(current) === setting.value;
+  return current === setting.value;
+}
+
+export function macDefaultWriteArgs(setting: MacDefault): string[] {
+  const type = typeof setting.value === "boolean" ? "-bool" : typeof setting.value === "number" ? "-float" : "-string";
+  return ["write", setting.domain, setting.key, type, String(setting.value)];
+}
+
+export async function applyMacDefaults(c: RecipeContext, settings: readonly MacDefault[] = macDefaults): Promise<ToolResult> {
+  if (c.host.platform !== "darwin") return result("macos-defaults", "blocked", "macOS settings apply only on macOS.");
+  const defaults = executable(c, "defaults");
+  if (!defaults) return result("macos-defaults", "blocked", "The macOS defaults command is unavailable.");
+  const matches = async (setting: MacDefault) => {
+    const current = await c.run(defaults, ["read", setting.domain, setting.key], { quiet: true });
+    return current.code === 0 && macDefaultMatches(setting, current.stdout);
+  };
+  const changed: MacDefault[] = [];
+  for (const setting of settings) {
+    if (await matches(setting)) continue;
+    const written = await c.run(defaults, macDefaultWriteArgs(setting), { quiet: true });
+    if (written.code !== 0 || !await matches(setting)) return result("macos-defaults", "failed", `Could not set ${setting.domain} ${setting.key}${changed.length ? `; already applied: ${changed.map(item => item.key).join(", ")}` : ""}.`);
+    changed.push(setting);
+  }
+  if (!changed.length) return result("macos-defaults", "unchanged");
+  const attention: string[] = [];
+  const killall = executable(c, "killall");
+  for (const name of new Set(changed.flatMap(setting => setting.restart ? [setting.restart] : []))) {
+    if (!killall || (await c.run(killall, [name], { quiet: true })).code !== 0) attention.push(`Restart ${name} (killall ${name}) or log out to load the new settings.`);
+  }
+  attention.push(...new Set(changed.flatMap(setting => setting.followUp ? [setting.followUp] : [])));
+  console.log(`macos-defaults: set ${changed.map(setting => `${setting.domain} ${setting.key}`).join(", ")}`);
+  return result("macos-defaults", "changed", ...attention);
+}
+
+export const amphetamineDomain = "com.if.Amphetamine";
+export const amphetamineSettingsFile = "amphetamine/amphetamine.plist";
+
+/**
+ * Amphetamine's settings tracked in amphetamine/amphetamine.plist, as one `defaults` value per key. The app's own
+ * plist cannot be a symlink: cfprefsd refuses to read or write a symlinked preferences file.
+ */
+export async function amphetamineSettings(c: RecipeContext): Promise<MacDefault[]> {
+  const plutil = executable(c, "plutil") ?? "/usr/bin/plutil";
+  const converted = await c.run(plutil, ["-convert", "json", "-o", "-", join(c.repoRoot, amphetamineSettingsFile)], { quiet: true, stdin: "ignore" });
+  if (converted.code !== 0) throw new Error(`Could not read ${amphetamineSettingsFile}: ${converted.stderr.trim()}`);
+  const parsed: unknown = JSON.parse(converted.stdout);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error(`${amphetamineSettingsFile} must be a dictionary.`);
+  return Object.entries(parsed).map(([key, value]) => {
+    if (typeof value !== "boolean" && typeof value !== "number" && typeof value !== "string") throw new Error(`${amphetamineSettingsFile}: ${key} must be a boolean, number, or string.`);
+    return { domain: amphetamineDomain, key, value };
+  });
+}
+
+/** Run one AppleScript line; the first run asks for permission to control the target app. */
+async function appleScript(c: RecipeContext, osascript: string, script: string) {
+  const output = await c.run(osascript, ["-e", script], { quiet: true, stdin: "ignore" });
+  return { ok: output.code === 0, value: output.stdout.trim(), error: output.stderr.trim() };
+}
+
+/** Keep the Mac awake: tracked Amphetamine settings, Amphetamine as a login item, and a running session. */
+export async function applyAmphetamine(c: RecipeContext, app: string): Promise<ToolResult> {
+  const id = "amphetamine-config";
+  if (c.host.platform !== "darwin") return result(id, "blocked", "Amphetamine is macOS-only.");
+  const defaults = executable(c, "defaults"), osascript = executable(c, "osascript");
+  if (!defaults || !osascript) return result(id, "blocked", "The macOS defaults and osascript commands are required.");
+  if (!await lstat(join(app, "Contents/MacOS/Amphetamine")).then(() => true, () => false)) return result(id, "blocked", "Amphetamine is not installed; select Amphetamine and rerun.");
+  const settings = await amphetamineSettings(c);
+  const matches = async (setting: MacDefault) => {
+    const current = await c.run(defaults, ["read", setting.domain, setting.key], { quiet: true });
+    return current.code === 0 && macDefaultMatches(setting, current.stdout);
+  };
+  const running = async () => (await c.run("/usr/bin/pgrep", ["-x", "Amphetamine"], { quiet: true })).code === 0;
+  const changes: string[] = [];
+  const attention: string[] = [];
+  // Amphetamine is sandboxed: its settings live in its container, which macOS shields from other apps unless the
+  // terminal is allowed (first access asks; Full Disk Access also allows it). Probe before quitting the app.
+  const container = join(c.home, "Library/Containers/com.if.Amphetamine/Data/Library");
+  const shielded = await readdir(container).then(() => false, (error: NodeJS.ErrnoException) => error.code === "EPERM" || error.code === "EACCES");
+  if (shielded) attention.push("macOS blocked this terminal from Amphetamine's settings. Allow it when macOS asks, or turn on Full Disk Access for the terminal in System Settings → Privacy & Security, then rerun.");
+  else {
+    const pending: MacDefault[] = [];
+    for (const setting of settings) if (!await matches(setting)) pending.push(setting);
+    if (pending.length) {
+      // A running app would write its in-memory values back over ours.
+      if (await running()) {
+        const quit = await appleScript(c, osascript, `tell application "Amphetamine" to quit`);
+        if (!quit.ok) return result(id, "failed", `Could not quit Amphetamine to update its settings (${quit.error}); quit it and rerun.`);
+        for (let attempt = 0; attempt < 20 && await running(); attempt++) await Bun.sleep(250);
+      }
+      for (const setting of pending) {
+        const written = await c.run(defaults, macDefaultWriteArgs(setting), { quiet: true });
+        if (written.code !== 0 || !await matches(setting)) { attention.push(`Could not set Amphetamine “${setting.key}”${written.stderr.trim() ? ` (${written.stderr.trim()})` : ""}.`); break; }
+      }
+      if (!attention.length) changes.push(`set ${pending.map(setting => `“${setting.key}”`).join(", ")}`);
+    }
+  }
+  const loginItems = await appleScript(c, osascript, `tell application "System Events" to get the path of every login item`);
+  if (!loginItems.ok) return result(id, "failed", `Could not read login items (${loginItems.error}); allow the terminal to control System Events in System Settings → Privacy & Security → Automation.`);
+  if (!loginItems.value.split(", ").some(path => path.replace(/\/$/, "") === app)) {
+    const added = await appleScript(c, osascript, `tell application "System Events" to make login item at end with properties {path:"${app}", hidden:true}`);
+    if (!added.ok) return result(id, "failed", `Could not add Amphetamine to login items (${added.error}).`);
+    changes.push("opens at login");
+  }
+  if (!await running()) {
+    const opened = await c.run("/usr/bin/open", ["-g", "-a", app], { quiet: true });
+    if (opened.code !== 0) return result(id, "failed", "Could not open Amphetamine.");
+    for (let attempt = 0; attempt < 40 && !await running(); attempt++) await Bun.sleep(250);
+  }
+  // “Start Session At Launch” covers fresh launches; an app that was already running needs the session started here.
+  let active = await appleScript(c, osascript, `tell application "Amphetamine" to session is active`);
+  for (let attempt = 0; attempt < 20 && active.ok && active.value !== "true"; attempt++) { await Bun.sleep(250); active = await appleScript(c, osascript, `tell application "Amphetamine" to session is active`); }
+  if (!active.ok) return result(id, "failed", `Could not ask Amphetamine for its session (${active.error}); allow the terminal to control Amphetamine in System Settings → Privacy & Security → Automation.`);
+  if (active.value !== "true") {
+    const started = await appleScript(c, osascript, `tell application "Amphetamine" to start new session`);
+    const confirmed = await appleScript(c, osascript, `tell application "Amphetamine" to session is active`);
+    if (!started.ok || confirmed.value !== "true") return result(id, "failed", "Amphetamine is running but would not start a keep-awake session.");
+    changes.push("started a session");
+  }
+  if (changes.length) console.log(`${id}: ${changes.join("; ")}`);
+  if (attention.length) return result(id, "blocked", ...attention);
+  return result(id, changes.length ? "changed" : "unchanged");
 }

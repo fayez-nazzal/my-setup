@@ -5,13 +5,13 @@ Small scripts symlinked onto `$PATH` (`~/.local/bin`, already added to
 
 ```sh
 mkdir -p "$HOME/.local/bin"
-ln -sfn "$HOME/my-setup/bin/alacritty" "$HOME/.local/bin/alacritty"
+ln -sfn "$HOME/my-setup/bin/aerospace-alacritty" "$HOME/.local/bin/aerospace-alacritty"
 ```
 
-- **`alacritty`** — locates the real Alacritty binary without recursing through
-  this wrapper, then runs ordinary launches in persistent tmux session `main`.
-  Explicit `-e`/`--command` and non-window subcommands pass through verbatim.
-  Requires tmux for ordinary launches and a separately installed Alacritty.
+- **`aerospace-alacritty`** — macOS AeroSpace Alt+Enter helper: focuses an
+  existing Alacritty window, otherwise opens Alacritty (`open -b org.alacritty`),
+  whose configuration starts the tmux session (see
+  [`../alacritty/README.md`](../alacritty/README.md)).
 - **`styleguard`** — provider-agnostic AI-content-detection + personal-style
   CLI: detect-scores a draft against Winston AI, rewrites low-scoring
   sentences with `gpt-6-astra` via the OpenAI Responses API, and enforces a

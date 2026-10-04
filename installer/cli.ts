@@ -1,16 +1,20 @@
-import { lstat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, lstat } from "node:fs/promises";
 import { BoxRenderable, TextRenderable, createCliRenderer } from "@opentui/core";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { catalog, configurationLinks, configurationPrerequisites } from "./domain/catalog";
+import { catalog, configurationLinks, configurationPrerequisites, desktopOnly, retiredConfigurationLinks, runAfter } from "./domain/catalog";
 import { initialSelection, reduceSelection } from "./domain/selection";
 import type { ComponentAvailability, ComponentId, ComponentResult } from "./domain/model";
 import { UserFileLinks, assertOmpAgentDirectoryIsReal, migrateGitIdentity, migrateZshLocal, scanBackupForCredentials } from "./infrastructure/links";
 import { inspectHost } from "./infrastructure/host";
-import { inspectPackage, installRecipe } from "./infrastructure/packages";
+import { inspectPackage, installRecipe, packageSudoRoutes } from "./infrastructure/packages";
 import type { SoftwareState } from "./infrastructure/packages";
-import { installAerospaceSource, installAlacrittySource, installTmuxPlugins, installTmuxscope, installZshAbbr } from "./infrastructure/tools";
-import { applyGnome, installKeyd, installKeydFromSource } from "./infrastructure/desktop";
+import { amphetamineApp, appIds, appSudoRoutes, inspectApp, installApp, opSshSignPath } from "./infrastructure/apps";
+import { configureGitSigning, currentSigningMethod, ensureGhAuth, gitConfigTarget, signingItems, signingKeyPath } from "./infrastructure/github";
+import { ensureOpSession } from "./infrastructure/onepassword";
+import { githubToolsScript, installAerospaceSource, installAlacrittySource, installGithubToolsCron, installTmuxPlugins, installZshAbbr, syncGithubTools } from "./infrastructure/tools";
+import { amphetamineSettings, applyAmphetamine, applyGnome, applyMacDefaults, installKeyd, installKeydFromSource, macDefaultWriteArgs, macDefaults } from "./infrastructure/desktop";
 import { commands, ensureSudo } from "./infrastructure/commands";
 
 const args = process.argv.slice(2);
@@ -31,8 +35,12 @@ const refreshHost = async () => {
 };
 const recipeContext = { host: recipeHost, home, repoRoot: root, run: commands.run.bind(commands), ensureLink: fileLinks.ensureLink.bind(fileLinks), backupUserFile: fileLinks.backup.bind(fileLinks), refreshHost };
 const availability = new Map<ComponentId, ComponentAvailability>();
-const softwareIds: ComponentId[] = ["zsh","git","tmux","starship","zoxide","fzf","bat","eza","fd","ripgrep","thefuck","volta","node-lts","alacritty","nerd-font","aerospace","linux-desktop","keyd"];
+const softwareIds: ComponentId[] = ["zsh","git","tmux","starship","zoxide","fzf","bat","eza","fd","ripgrep","thefuck","killport","volta","node-lts","alacritty","nerd-font","1password-cli","1password","gh","obsidian","aerospace","google-chrome","orbstack","amphetamine","linux-desktop","keyd"];
 const softwareStates = new Map<ComponentId, SoftwareState>();
+const inspect = (id: ComponentId) => appIds.has(id) ? inspectApp(recipeContext, id) : inspectPackage(recipeContext, id);
+const sudoRoutes = new Set([...packageSudoRoutes, ...appSudoRoutes]);
+const headless = (id: ComponentId) => host.platform === "linux" && !host.graphical && desktopOnly.has(id);
+const headlessReason = "This Linux host is headless (no display, desktop session, or graphical target); desktop-only.";
 // Refresh Homebrew's index first so missing tools install, and outdated ones are detected, at their latest versions.
 if (!dryRun && host.packageManagers.brew) {
   console.log("Updating Homebrew…");
@@ -40,7 +48,8 @@ if (!dryRun && host.packageManagers.brew) {
 }
 console.log("Inspecting installed software…");
 for (const id of softwareIds) {
-  try { softwareStates.set(id, await inspectPackage(recipeContext, id)); }
+  if (headless(id)) { softwareStates.set(id, { installed:false, healthy:false, reason:headlessReason }); continue; }
+  try { softwareStates.set(id, await inspect(id)); }
   catch (error) { softwareStates.set(id, { installed:false, healthy:false, reason:error instanceof Error ? error.message : String(error) }); }
 }
 for (const item of catalog) {
@@ -50,9 +59,10 @@ for (const item of catalog) {
   const state = softwareStates.get(item.id);
   if (state) { installed = state.installed; if (!state.installed && !state.route) { enabled = false; reason = state.reason ?? "No supported installation route is available."; } }
   const outdated = Boolean(state?.installed && state.outdated && state.route);
-  if (item.id === "zsh-abbr" || item.id === "tmuxscope" || item.id === "tmux-plugins") { enabled = item.platforms.includes(host.platform); }
+  if (item.id === "zsh-abbr" || item.id === "github-tools" || item.id === "github-tools-cron" || item.id === "tmux-plugins") { enabled = item.platforms.includes(host.platform); }
   if (item.id === "gnome-apply") { enabled = host.platform === "linux" && host.gnome.active && Boolean(host.gnome.dbusAddress) && Boolean(host.gnome.dconf); if (!enabled) reason = "Active GNOME session, DBus address, and dconf are required."; }
   if (item.id === "keyd-config") enabled = host.platform === "linux";
+  if (headless(item.id)) { enabled = false; reason = headlessReason; }
   availability.set(item.id, { enabled, reason, installed, outdated });
 }
 for (const item of catalog) {
@@ -72,7 +82,7 @@ let done = false;
 const draw = () => {
   const availableHeight = Math.max(0, (process.stdout.rows ?? 24) - 6);
   if (availableHeight < 3 || (process.stdout.columns ?? 80) < 40) { text.content = "Terminal too small. Resize the terminal to continue.\nEsc Cancel"; renderer.requestRender(); return; }
-  const rows: string[] = [`Interactive installer · ${host.platform} · ${host.architecture}`, "Supported choices are selected by default", ""];
+  const rows: string[] = [`Interactive installer · ${host.platform} · ${host.architecture}${host.platform === "linux" && !host.graphical ? " · headless" : ""}`, "Supported choices are selected by default", ""];
   const rendered: string[] = [];
   const componentRows: number[] = [];
   let group = "";
@@ -118,7 +128,7 @@ if (!state.selected.size) { console.log("Nothing selected."); process.exit(0); }
 const results: ComponentResult[] = [];
 const attentionNotes: string[] = [];
 const selectedSoftware = [...state.selected].filter((id) => softwareStates.has(id));
-const needsSudo = (host.platform === "linux" && selectedSoftware.some((id) => ["apt", "apt-reinstall", "apt-fontconfig"].includes(softwareStates.get(id)?.route ?? "") || (id === "keyd" && !softwareStates.get(id)?.installed))) || state.selected.has("keyd-config");
+const needsSudo = (selectedSoftware.some((id) => sudoRoutes.has(softwareStates.get(id)?.route ?? "") || (host.platform === "linux" && id === "keyd" && !softwareStates.get(id)?.installed))) || state.selected.has("keyd-config") || (host.platform === "linux" && state.selected.has("github-tools-cron") && !host.executables.has("crontab"));
 let sudoAvailable = true;
 if (!dryRun && needsSudo) sudoAvailable = await ensureSudo();
 const executionOrder: ComponentId[] = [];
@@ -130,6 +140,7 @@ const visit = (id: ComponentId): void => {
   const item = catalog.find((entry) => entry.id === id);
   for (const dependency of item?.requires ?? []) visit(dependency);
   for (const prerequisite of configurationPrerequisites[id] ?? []) if (catalog.some((entry) => entry.id === prerequisite)) visit(prerequisite as ComponentId);
+  for (const earlier of runAfter[id] ?? []) visit(earlier);
   executionOrder.push(id);
 };
 for (const item of catalog) visit(item.id);
@@ -137,7 +148,25 @@ for (const id of executionOrder) {
   try {
     if (dryRun) {
       const paths = configurationLinks[id];
-      if (paths) console.log(`${id}: ${paths.map(([source,target]) => `link ${source} -> ${target}`).join(", ")}`);
+      const retired = (retiredConfigurationLinks[id] ?? []).map(([source,target]) => `remove ${target} if it links to ${source}`);
+      if (paths) console.log(`${id}: ${[...paths.map(([source,target]) => `link ${source} -> ${target}`), ...retired].join(", ")}`);
+      else if (id === "macos-defaults") console.log(`${id}: where different, ${macDefaults.map(setting => `defaults ${macDefaultWriteArgs(setting).join(" ")}`).join("; ")}`);
+      else if (id === "amphetamine-config") console.log(`${id}: where different, ${(await amphetamineSettings(recipeContext)).map(setting => `defaults ${macDefaultWriteArgs(setting).join(" ")}`).join("; ")}; add ${amphetamineApp} to login items; start a session`);
+      else if (id === "github-tools" || id === "github-tools-cron") {
+        const plan = await commands.run(githubToolsScript(root), id === "github-tools" ? ["list"] : ["cron", "show"], { quiet: true });
+        console.log(`${id}: ${id === "github-tools" ? "sync" : "crontab entry"}\n${plan.stdout.trimEnd().replace(/^/gm, "  ")}`);
+      }
+      else if (id === "1password-signin") console.log(`${id}: install op when missing; check op vault access; otherwise enable the app's CLI integration, or op account add + op signin (interactive)`);
+      else if (id === "gh-auth") console.log(`${id}: check gh auth status; otherwise gh auth login --web with the admin:ssh_signing_key and write:gpg_key scopes (interactive)`);
+      else if (id === "git-signing") {
+        const git = host.executables.get("git");
+        const target = git ? (await gitConfigTarget(recipeContext, git)).at(-1) : "~/.gitconfig.local";
+        const method = git ? await currentSigningMethod(recipeContext, git) : undefined;
+        const signer = await access(opSshSignPath(host.platform), constants.X_OK).then(() => `op-ssh-sign (${opSshSignPath(host.platform)})`, () => `ssh-keygen with ${signingKeyPath(home)} encrypted by “${signingItems.passphrase}”`);
+        const gpgPlan = `OpenPGP: gpg + pinentry, the configured key or 1Password “${signingItems.gpgSecretKey}” (offer a backup when missing), unlocked by “${signingItems.passphrase}”; set gpg.format=openpgp, user.signingkey, commit.gpgsign=true`;
+        const sshPlan = `SSH: 1Password “${signingItems.sshKey}” signed by ${signer}; set gpg.format=ssh, user.signingkey, gpg.ssh.program, gpg.ssh.allowedSignersFile, commit.gpgsign=true`;
+        console.log(`${id}: ${method === "openpgp" ? gpgPlan : method === "ssh" ? sshPlan : `ask which method — ${gpgPlan} | ${sshPlan}`} in ${target}; register the key on GitHub; verify a test commit`);
+      }
       else console.log(`${id}: ${softwareStates.get(id)?.route ?? "selected operation"}${softwareStates.get(id)?.reason ? ` (${softwareStates.get(id)?.reason})` : ""}`);
       results.push({ id, status:"unchanged", attention:[] }); continue;
     }
@@ -150,6 +179,7 @@ for (const id of executionOrder) {
     const links = configurationLinks[id];
     if (links) {
       const messages: string[] = [];
+      for (const [source, destination] of retiredConfigurationLinks[id] ?? []) if (await fileLinks.removeRetiredLink(join(root, source), join(home, destination)) === "changed") messages.push(`removed ${destination}`);
       for (const [source, destination] of links) if (await fileLinks.ensureLink(join(root, source), join(home, destination)) === "changed") messages.push(destination);
       if (id === "git-config" && fileLinks.backupDirectory) {
         const backup = join(fileLinks.backupDirectory, ".gitconfig");
@@ -173,6 +203,11 @@ for (const id of executionOrder) {
           if (reloaded.code !== 0) attentionNotes.push("The tmux configuration link changed, but the active tmux server could not reload it.");
         }
       }
+      if (id === "alacritty-config") {
+        const alacritty = recipeContext.host.executables.get("alacritty");
+        const version = alacritty ? /alacritty\s+(\d+)\.(\d+)/.exec((await commands.run(alacritty, ["--version"], { quiet: true })).stdout) : null;
+        if (version && Number(version[1]) === 0 && Number(version[2]) < 14) attentionNotes.push(`Alacritty ${version[1]}.${version[2]} ignores terminal.shell, so its windows will not open in tmux; install Alacritty 0.14 or newer.`);
+      }
       for (const prerequisite of configurationPrerequisites[id] ?? []) {
         if (!recipeContext.host.executables.has(prerequisite) && !softwareStates.get(prerequisite as ComponentId)?.installed) attentionNotes.push(`${id} was linked, but the optional ${prerequisite} executable is not available.`);
       }
@@ -180,8 +215,8 @@ for (const id of executionOrder) {
       console.log(`${id}: ${status}`); results.push({ id, status, attention:[] }); continue;
     }
     let outcome: { id:string; status:"changed"|"unchanged"|"blocked"|"failed"; attention:string[] };
-    if (["zsh-abbr","tmuxscope","tmux-plugins"].includes(id)) {
-      const recipe = id === "zsh-abbr" ? installZshAbbr : id === "tmuxscope" ? installTmuxscope : installTmuxPlugins;
+    if (["zsh-abbr","tmux-plugins","github-tools","github-tools-cron"].includes(id)) {
+      const recipe = id === "zsh-abbr" ? installZshAbbr : id === "github-tools" ? syncGithubTools : id === "github-tools-cron" ? installGithubToolsCron : installTmuxPlugins;
       outcome = await recipe(recipeContext);
     } else if (id === "alacritty" && host.platform === "darwin" && softwareStates.get(id)?.route === "source") outcome = await installAlacrittySource(recipeContext);
     else if (id === "aerospace" && softwareStates.get(id)?.route === "aerospace-source") outcome = await installAerospaceSource(recipeContext);
@@ -190,10 +225,18 @@ for (const id of executionOrder) {
     else if (id === "keyd-config" && !sudoAvailable) outcome = { id, status: "blocked", attention: ["Elevation was declined or unavailable; manually install the selected /etc/keyd links with sudo."] };
     else if (id === "keyd-config") outcome = await installKeyd(recipeContext);
     else if (id === "gnome-apply") outcome = await applyGnome(recipeContext);
+    else if (id === "macos-defaults") outcome = await applyMacDefaults(recipeContext);
+    else if (id === "amphetamine-config") outcome = await applyAmphetamine(recipeContext, amphetamineApp);
+    else if (id === "1password-signin") {
+      const session = await ensureOpSession(recipeContext);
+      outcome = session.ok ? { id, status: session.changed ? "changed" : "unchanged", attention: [] } : { id, status: "blocked", attention: [session.reason] };
+    }
+    else if (id === "gh-auth") outcome = await ensureGhAuth(recipeContext);
+    else if (id === "git-signing") outcome = await configureGitSigning(recipeContext);
     else {
-      if ((["apt", "apt-reinstall", "apt-fontconfig"].includes(softwareStates.get(id)?.route ?? "") || id === "linux-desktop" || id === "keyd") && !sudoAvailable) outcome = { id, status:"blocked", attention:["Elevation was declined or unavailable; rerun the exact package command with sudo."] };
+      if ((sudoRoutes.has(softwareStates.get(id)?.route ?? "") || id === "linux-desktop" || id === "keyd") && !sudoAvailable) outcome = { id, status:"blocked", attention:["Elevation was declined or unavailable; rerun the exact package command with sudo."] };
       else {
-        const result = await installRecipe(recipeContext, id);
+        const result = appIds.has(id) ? await installApp(recipeContext, id) : await installRecipe(recipeContext, id);
         if (result.code !== 0) outcome = { id, status:"failed", attention:[result.stderr || `${id} failed with exit ${result.code}`] };
         else if (result.stdout.includes("already")) outcome = { id, status:"unchanged", attention:[] };
         else outcome = { id, status:"changed", attention:[] };
@@ -201,7 +244,7 @@ for (const id of executionOrder) {
     }
     if (outcome.status === "changed") await refreshHost();
     if (outcome.status === "changed" && softwareStates.has(id)) {
-      const verified = await inspectPackage(recipeContext, id);
+      const verified = await inspect(id);
       if (!verified.installed) outcome = { id, status:"failed", attention:[verified.reason ?? `${id} did not pass executable or installation verification after its recipe ran.`] };
     }
     console.log(`${id}: ${outcome.status}`); results.push({ id, status:outcome.status, attention:outcome.attention });

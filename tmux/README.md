@@ -34,34 +34,25 @@ Back up an existing `~/.tmux.conf` before creating the link.
   separate tool):**
   [https://github.com/fayez-nazzal/tmuxscope](https://github.com/fayez-nazzal/tmuxscope)
 
-  `tmux/tmux-scopes.conf` includes `my-setup = ~/my-setup` for this repo
-  and `repos = ~/repos` for tools. That scope already covers
-  `~/repos/tools/tmuxscope`, so no extra entry is needed to build it here:
+  The installer's **GitHub tools** choice clones it into `~/tools/tmuxscope`,
+  builds it from `main`, links `~/.local/bin/tmuxscope`, and keeps it updated
+  twice a day (see [`../tools/README.md`](../tools/README.md)). By hand:
 
   ```sh
-  mkdir -p "$HOME/repos/tools"
-  git clone https://github.com/fayez-nazzal/tmuxscope.git "$HOME/repos/tools/tmuxscope"
-  cd "$HOME/repos/tools/tmuxscope"
-  bun install
-  bun run build
-  bun link
+  ~/my-setup/tools/sync.sh
   ```
 
-  `bun link` (run inside the cloned repo) registers the package globally and
-  symlinks its compiled binary onto `bun`'s global bin dir
-  (`~/.bun/bin/tmuxscope`, already on `PATH` via `zsh/.config/zsh/rc.d/`) —
-  no separate install step needed. Verify with `tmuxscope --version`; this
-  checkout is version `0.2.2`. It requires tmux ≥ 3.0, zsh, and Bun ≥ 1.2.
-  The bootstrap discovers existing Bun in `~/.bun/bin`; it does not install Bun.
+  `tmux/tmux-scopes.conf` includes `my-setup = ~/my-setup` for this repo,
+  `repos = ~/repos`, and `tools = ~/tools` for these checkouts. Verify with
+  `tmuxscope --version`. It requires tmux ≥ 3.0, zsh, and Bun ≥ 1.2.
 
   **Linux note:** the `0.2.2` release breaks routing on tmux builds that
   vis-escape control bytes in formatted command output (observed on
   Debian's packaged tmux 3.5a; not on Homebrew's tmux on macOS). The
   symptom is every `cd` failing with `tmuxscope route: tmux list-panes …
   failed: can't find window` and a literal `\037` inside the printed tmux
-  target. This is fixed upstream past `0.2.2` (the `FIELD` separator moved
-  off the byte tmux rewrites) — after cloning, check out `main` rather than
-  the `0.2.2` tag, or apply that fix on top, before `bun run build`.
+  target. This is fixed upstream past `0.2.2`; the sync builds `main`, which
+  includes the fix.
 
   The scope definitions are tracked in `tmux/tmux-scopes.conf`; install
   them with:

@@ -68,6 +68,27 @@ describe("UserFileLinks", () => {
     expect(links.backupDirectory).toBeUndefined();
   });
 
+  test("removes a retired link only while it still targets the removed repository file", async () => {
+    const links = new UserFileLinks({ home });
+    const retired = join(root, "repo", "bin", "old-tool");
+    await mkdir(join(root, "repo", "bin"));
+    const owned = join(home, "owned");
+    await symlink(retired, owned);
+    expect(await links.removeRetiredLink(retired, owned)).toBe("changed");
+    expect(await lstat(owned).catch(() => undefined)).toBeUndefined();
+
+    const userLink = join(home, "user-link");
+    await symlink("/usr/bin/old-tool", userLink);
+    const userFile = join(home, "user-file");
+    await writeFile(userFile, "keep me");
+    expect(await links.removeRetiredLink(retired, userLink)).toBe("unchanged");
+    expect(await links.removeRetiredLink(retired, userFile)).toBe("unchanged");
+    expect(await links.removeRetiredLink(retired, join(home, "absent"))).toBe("unchanged");
+    expect(await readlink(userLink)).toBe("/usr/bin/old-tool");
+    expect(await readFile(userFile, "utf8")).toBe("keep me");
+    expect(links.backupDirectory).toBeUndefined();
+  });
+
   test("does not overwrite a dangling git local override link", async () => {
     const links = new UserFileLinks({ home });
     const original = join(home, ".gitconfig");

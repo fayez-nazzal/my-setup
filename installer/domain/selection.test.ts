@@ -6,7 +6,7 @@ const availability = new Map<ComponentId, ComponentAvailability>(catalog.map((it
 describe("component selection", () => {
   test("initial selection includes supported enabled rows and dependencies", () => {
     const value = initialSelection(catalog, availability);
-    expect(value.selected.has("tmuxscope")).toBe(true);
+    expect(value.selected.has("github-tools")).toBe(true);
     expect(value.selected.has("git")).toBe(true);
     expect(value.selected.has("tmux")).toBe(true);
   });
@@ -24,7 +24,8 @@ describe("component selection", () => {
     const gitRow = catalog.findIndex((item) => item.id === "git");
     state = reduceSelection({ ...state, cursor: gitRow }, "toggle", catalog, availability);
     expect(state.selected.has("git")).toBe(false);
-    expect(state.selected.has("tmuxscope")).toBe(false);
+    expect(state.selected.has("github-tools")).toBe(false);
+    expect(state.selected.has("github-tools-cron")).toBe(false);
     expect(state.selected.has("tmux-plugins")).toBe(false);
   });
   test("installed prerequisites need not be selected with their dependents", () => {

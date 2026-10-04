@@ -1,21 +1,47 @@
 # Alacritty
 
-Terminal emulator used by `../bin/alacritty`'s tmux-backed launcher, which
-also shadows the plain `alacritty` command on `$PATH` (see
-[`../bin/README.md`](../bin/README.md)). Ordinary launches use the shared
-tmux session; explicit `-e`/`--command` launches pass through for terminal
-commands from GNOME.
+Every Alacritty window opens in the shared tmux session `main`, however it is
+launched: Dock, Spotlight, `open -a Alacritty`, AeroSpace's Alt+Enter, GNOME's
+shortcut or `xdg-terminal-exec`, or `alacritty` from a shell. This lives in
+`terminal.shell` in [`alacritty.toml`](alacritty.toml), so no `$PATH` wrapper is
+involved. `alacritty -e CMD` replaces that shell and runs `CMD` without tmux.
+
+The shell runs a login zsh first, so the tmux server inherits the full login
+environment, then attaches with `tmux new-session -A -s main`. tmux is looked
+up on that `$PATH`, then in `/opt/homebrew/bin`, `/usr/local/bin`,
+`/home/linuxbrew/.linuxbrew/bin`, and `/usr/bin`. `TMUX` is cleared first, so
+a window opened from inside a tmux pane attaches instead of refusing to nest.
+Without tmux the window prints a notice and starts a plain login zsh.
+
+Detaching (`prefix d`) or ending the session closes the window. A window
+attaches session `main` while it exists and creates it otherwise; tmuxscope's
+hook (see [`../tmux`](../tmux)) renames sessions after their directory scope,
+so a later window usually starts a fresh `main`. Switch sessions inside tmux
+(`prefix s`).
 
 ## Install
 
+Select **Alacritty configuration** in `./install.sh`. It links
+`alacritty.toml` into `~/.config/alacritty/` and removes the
+`~/.local/bin/alacritty` wrapper link earlier versions of this repository
+created (only while it still points at this repository). Alacritty reloads the
+file automatically; already-open windows keep their shell, so open a new
+window to get tmux.
+
+By hand:
+
 ```sh
-sudo apt install alacritty
 mkdir -p "$HOME/.config/alacritty"
 ln -sfn "$HOME/my-setup/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
 ```
 
 Requires:
 
+- **Alacritty 0.14 or newer.** Older releases read the shell from the
+  top-level `shell` key and ignore `terminal.shell`, so their windows open a
+  plain shell. The installer flags such a version (for example Ubuntu 24.04's
+  APT package, 0.13.2).
+- **tmux** — the `tmux` installer choice.
 - `/bin/zsh` (hardcoded as `terminal.shell.program`) — adjust if zsh
   lives elsewhere on your system (`command -v zsh`), or if you haven't
   switched to zsh yet (see [`../zsh`](../zsh)).
