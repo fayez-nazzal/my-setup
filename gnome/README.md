@@ -1,9 +1,9 @@
-# GNOME companion setup
+# GNOME desktop setup
 
-This is the GNOME counterpart to [`../i3/config`](../i3/config). It keeps the
-same Option/Alt workspace habits, Apple Command application shortcuts through
-[`../keyd/`](../keyd/), Vicinae as a Raycast-style app launcher with clipboard
-history, Alacritty as the terminal, and Caps Lock as the fullscreen toggle.
+This config provides fixed workspaces, Option/Alt workspace habits, Apple
+Command application shortcuts through [`../keyd/`](../keyd/), Vicinae as an
+app launcher with clipboard history, Alacritty as the terminal, and Caps
+Lock as the fullscreen toggle.
 
 ## What is configured
 
@@ -19,15 +19,15 @@ history, Alacritty as the terminal, and Caps Lock as the fullscreen toggle.
   searching apps and opening clipboard history.
 - `Alt+D` → rofi `drun` as a lightweight app-launcher fallback.
 - `Alt+Enter` → the repository's Alacritty wrapper, using its persistent
-  tmux `main` session. Because GNOME has no i3 socket, each invocation can
-  open a separate Alacritty window. GNOME's terminal setting delegates to
-  `xdg-terminal-exec`, and `xdg-terminals.list` selects `Alacritty.desktop`.
+  tmux `main` session. Each invocation can open a separate Alacritty window.
+  GNOME's terminal setting delegates to `xdg-terminal-exec`, and
+  `xdg-terminals.list` selects `Alacritty.desktop`.
 - `Alt+Shift+Insert` → lock screen.
 - GeistMono Nerd Font Mono as GNOME's monospace font and Alacritty's terminal
   font through the existing [`../alacritty/alacritty.toml`](../alacritty/alacritty.toml).
 
-GNOME does not provide i3/AeroSpace's native directional container focus,
-gaps, scratchpad, or per-window-class assignment rules. Those remain i3-only.
+GNOME does not provide AeroSpace's native directional container focus,
+gaps, scratchpad, or per-window-class assignment rules.
 GNOME supports only twelve numbered workspace keybinding slots, so the shared
 named layout exposes `G` and `P` as workspaces 11 and 12; the additional
 macOS-only `O`, `X`, `S`, `Q`, and `W` workspace names do not have native GNOME

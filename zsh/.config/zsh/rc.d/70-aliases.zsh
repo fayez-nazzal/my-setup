@@ -37,27 +37,3 @@ omp() {
   fi
   SHELL="$(command -v zsh)" command omp "$@"
 }
-
-# Linux-only power controls (systemd). No-op on macOS.
-command -v systemctl >/dev/null 2>&1 && alias shutdown='systemctl poweroff'
-command -v systemctl >/dev/null 2>&1 && alias restart='systemctl reboot'
-
-# Machine-local audio helpers (see ../../../../bin/README.md) — only
-# defined when the scripts are actually on PATH.
-if command -v noise-cancel >/dev/null 2>&1; then
-  alias ncon='noise-cancel on'
-  alias ncoff='noise-cancel off'
-  alias ncstatus='noise-cancel status'
-fi
-
-if command -v audio-control >/dev/null 2>&1; then
-  alias speaker-up='audio-control speaker up'
-  alias speaker-down='audio-control speaker down'
-  alias speaker-mute='audio-control speaker mute'
-  alias speaker-volume='audio-control speaker volume'
-  alias mic-up='audio-control mic up'
-  alias mic-down='audio-control mic down'
-  alias mic-mute='audio-control mic mute'
-  alias mic-volume='audio-control mic volume'
-  alias audio-help='audio-control help'
-fi

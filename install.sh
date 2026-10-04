@@ -241,11 +241,10 @@ install_omp() {
   mkdir -p "$HOME/.omp/agent"
   link "$REPO_DIR/.omp/agent/config.yml"    "$HOME/.omp/agent/config.yml"
   link "$REPO_DIR/.omp/agent/models.yml"    "$HOME/.omp/agent/models.yml"
-  link "$REPO_DIR/.omp/agent/mcp.json"      "$HOME/.omp/agent/mcp.json"
   link "$REPO_DIR/.omp/agent/extensions"    "$HOME/.omp/agent/extensions"
   link "$REPO_DIR/.omp/agent/skills"        "$HOME/.omp/agent/skills"
   link "$REPO_DIR/bin/omp-hide-aws-skills" "$HOME/.local/bin/omp-hide-aws-skills"
-  note "~/.omp/agent/ also holds live runtime state (databases, sessions, caches) once the agent has run. This script only ever touches config.yml/models.yml/mcp.json/extensions/skills — never symlink the whole agent/ directory."
+  note "~/.omp/agent/ also holds live runtime state (databases, sessions, caches) once the agent has run. This script only touches config.yml/models.yml/extensions/skills — never symlink the whole agent/ directory."
 }
 
 install_styleguard() {
@@ -309,24 +308,8 @@ install_recommended_tools() {
 
   if command -v brew >/dev/null 2>&1; then
     log "Recommended tools: installing via Homebrew"
-    brew install starship zoxide fzf bat eza fd ripgrep thefuck uv || warn "brew install had failures"
+    brew install starship zoxide fzf bat eza fd ripgrep thefuck || warn "brew install had failures"
     return 0
-  fi
-  if ! command -v uv >/dev/null 2>&1 || ! command -v uvx >/dev/null 2>&1; then
-    local installer
-    installer="$(mktemp)" || {
-      warn "uv: could not create temporary installer file"
-      note "uv/uvx unavailable; install uv before configuring the AWS MCP server."
-      return 0
-    }
-    if curl -fsSL https://astral.sh/uv/install.sh -o "$installer" &&
-       UV_INSTALL_DIR="$HOME/.local/bin" UV_NO_MODIFY_PATH=1 sh "$installer"; then
-      :
-    else
-      warn "uv: official installer failed"
-      note "uv/uvx unavailable; install uv before configuring the AWS MCP server."
-    fi
-    rm -f "$installer"
   fi
 
 
@@ -380,9 +363,8 @@ install_macos_desktop() {
 }
 
 install_linux_packages() {
-  pkgs="i3 i3-wm i3lock i3status python3 dex feh picom rofi xss-lock
-    network-manager network-manager-gnome pulseaudio-utils alacritty
-    pipewire pipewire-audio-client-libraries wireplumber jq zsh git tmux fd-find thefuck"
+  pkgs="rofi network-manager network-manager-gnome pulseaudio-utils alacritty
+    pipewire pipewire-audio-client-libraries wireplumber zsh git tmux fd-find thefuck"
 
   if command -v apt-cache >/dev/null 2>&1 && apt-cache show keyd >/dev/null 2>&1; then
     pkgs="$pkgs keyd"
@@ -460,22 +442,22 @@ install_keyd_from_source() {
 
 install_nerd_font() {
   command -v fc-match >/dev/null 2>&1 || {
-    note "fontconfig is unavailable — install the GeistMono Nerd Font manually (i3/README.md)."
+    note "fontconfig is unavailable — install the GeistMono Nerd Font manually (alacritty/README.md)."
     return 0
   }
   fc-match -f '%{family}' "GeistMono Nerd Font Mono" | grep -q "GeistMono" && return 0
 
-  log "font: installing GeistMono Nerd Font for the i3/Alacritty configs"
+  log "font: installing GeistMono Nerd Font for the Alacritty config"
   work=$(mktemp -d)
   if ! curl -fsSL -o "$work/release.json" https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest; then
-    note "Nerd Fonts release lookup failed — install GeistMono manually (i3/README.md)."
+    note "Nerd Fonts release lookup failed — install GeistMono manually (alacritty/README.md)."
     rm -rf "$work"
     return 0
   fi
   version=$(sed -n '/"tag_name"/{s/.*"tag_name": *"\([^"]*\)".*/\1/p;q;}' "$work/release.json")
   if [ -z "$version" ] || ! curl -fsSL -o "$work/GeistMono.tar.xz" \
     "https://github.com/ryanoasis/nerd-fonts/releases/download/$version/GeistMono.tar.xz"; then
-    note "GeistMono Nerd Font download failed — install it manually (i3/README.md)."
+    note "GeistMono Nerd Font download failed — install it manually (alacritty/README.md)."
     rm -rf "$work"
     return 0
   fi
@@ -486,7 +468,7 @@ install_nerd_font() {
     && fc-match -f '%{family}' "GeistMono Nerd Font Mono" | grep -q "GeistMono"; then
     log "font: GeistMono Nerd Font is ready"
   else
-    note "GeistMono Nerd Font install failed — install it manually (i3/README.md)."
+    note "GeistMono Nerd Font install failed — install it manually (alacritty/README.md)."
   fi
   rm -rf "$work"
 }
@@ -506,16 +488,11 @@ link_system_config() {
 }
 
 install_linux_desktop() {
-  log "Linux: i3 + GNOME + keyd + picom + Alacritty + PipeWire"
+  log "Linux: GNOME + keyd + Alacritty"
 
-  mkdir -p "$HOME/.config/i3" "$HOME/.config/i3status" "$HOME/.config/picom" "$HOME/.config/alacritty" "$HOME/.local/bin"
-  link "$REPO_DIR/i3/config" "$HOME/.config/i3/config"
-  link "$REPO_DIR/i3/i3status/status.py" "$HOME/.config/i3status/status.py"
-  link "$REPO_DIR/picom/picom.conf" "$HOME/.config/picom/picom.conf"
+  mkdir -p "$HOME/.config/alacritty" "$HOME/.local/bin"
   link "$REPO_DIR/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
-  for f in alacritty audio-control noise-cancel; do
-    link "$REPO_DIR/bin/$f" "$HOME/.local/bin/$f"
-  done
+  link "$REPO_DIR/bin/alacritty" "$HOME/.local/bin/alacritty"
   install_nerd_font
 
   install_keyd_from_source
@@ -536,13 +513,6 @@ install_linux_desktop() {
   else
     note "keyd needs root — run the system-link/service commands in keyd/README.md yourself."
   fi
-  note "i3/config has app-specific window-class assignments — adjust them for apps you use (i3/README.md)."
-
-  if [ ! -f "$HOME/.config/i3/wallpaper/nature.jpg" ]; then
-    note "No i3 wallpaper at $HOME/.config/i3/wallpaper/nature.jpg — add your own image or change the feh path (i3/README.md)."
-  fi
-
-  note "pipewire/ (RNNoise filter + Firefox mic routing) is optional, hardware/browser-specific, and not installed by this script — see pipewire/README.md before adopting it."
 }
 install_gnome_desktop() {
   log "GNOME: symlinking declarative dconf settings"

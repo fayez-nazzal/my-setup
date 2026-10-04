@@ -1,17 +1,9 @@
 #!/usr/bin/env bash
 # Shadows the real /usr/bin/alacritty everywhere Alacritty gets launched.
 #
-# This lives at $HOME/.local/bin/alacritty, and .profile / zsh's
-# profile.d/20-path.zsh both put $HOME/.local/bin ahead of /usr/bin on
-# $PATH — for the X session (i3 exec, rofi drun's Alacritty.desktop, which
-# has a bare `Exec=alacritty` resolved via $PATH) and for an interactive
-# shell alike. So *every* way of starting "alacritty" (i3's $mod+Return,
-# rofi's launcher, or just typing `alacritty`) resolves to this script
-# window, backed by a persistent tmux session ("main") so new "terminals"
-# are tmux windows/panes, not new Alacritty processes. When i3 is running,
-# the wrapper focuses the existing Alacritty window; outside i3 it launches
-# normally. Closing the Alacritty window only detaches tmux; the session and
-# its history survive until the tmux server is killed.
+# This lives at $HOME/.local/bin/alacritty, ahead of /usr/bin on $PATH
+# for interactive shells and GNOME's xdg-terminal-exec launches. It keeps
+# ordinary terminal launches in the persistent tmux session "main".
 #
 # Non-window subcommands pass straight through to the real binary. Explicit
 # `-e`/`--command` launches also pass through so xdg-terminal-exec can run
@@ -35,18 +27,5 @@ for arg in "$@"; do
 done
 
 
-if command -v i3-msg >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
-  if existing=$(i3-msg -t get_tree 2>/dev/null | jq -r '
-    first(
-      .. | objects
-      | select(.window_properties?.class? == "Alacritty")
-      | .id
-    ) // empty' 2>/dev/null); then
-    if [ -n "${existing:-}" ] \
-      && i3-msg "[con_id=$existing] focus" >/dev/null 2>&1; then
-      exit 0
-    fi
-  fi
-fi
 
 exec "$REAL_ALACRITTY" -e tmux new-session -A -s main

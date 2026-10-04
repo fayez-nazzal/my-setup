@@ -11,8 +11,7 @@ stray `~/.config/keyd/` on a machine, it's not read by anything; delete it
 to avoid confusion.)
 
 - `default.conf` — every keyboard *except* the Apple Magic Keyboard.
-  It remaps Caps Lock to `F13` (bound to `fullscreen toggle` in
-  `../i3/config`) so Caps Lock stops being a lock key.
+  It remaps Caps Lock to `F13`, which GNOME uses for its fullscreen toggle.
 - `apple-magic-keyboard.conf` — scoped to both Apple Magic Keyboard IDs:
   Bluetooth `004c:029c` and USB `05ac:029c`. Find the ID for a connected
   keyboard with `sudo keyd.rvaiya monitor` on Ubuntu/Debian packages, or
@@ -22,8 +21,8 @@ to avoid confusion.)
   normal application shortcuts, sends distinct Insert/Delete chords for
   terminal copy/paste/cut (`../alacritty/alacritty.toml` turns those into
   `Copy`/`Paste` actions), and maps Command+Space to Super+Space, used for
-  rofi in i3 and Vicinae in GNOME. Plain Ctrl+C in a terminal still sends
-  `SIGINT`. The same Caps Lock → F13 remap and ISO extra-key fix apply.
+  Vicinae in GNOME. Plain Ctrl+C in a terminal still sends `SIGINT`. The same
+  Caps Lock → F13 remap and ISO extra-key fix apply.
 
 ## Install
 
@@ -71,5 +70,4 @@ sudo ln -sfn "$HOME/my-setup/keyd/apple-magic-keyboard.conf" /etc/keyd/apple-mag
 ```
 
 If you do not use an Apple Magic Keyboard, skip the Apple-specific file —
-`default.conf` alone still gives every other keyboard the Caps Lock → F13
-remap that `../i3/config` expects.
+`default.conf` still provides the Caps Lock → F13 remap used by GNOME.

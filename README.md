@@ -1,16 +1,15 @@
 # my-setup
 
-Personal dotfiles for zsh, tmux, tiling window managers, git, and
+Personal dotfiles for zsh, tmux, window management, git, and
 [Oh My Pi](https://github.com) (`omp`) agent configuration — cross-platform
-between macOS (AeroSpace) and Linux (i3 or GNOME + keyd + picom + Alacritty +
-Vicinae + PipeWire). Everything is designed to be symlinked from `$HOME` (or,
-for `keyd`, from `/etc/keyd/`) and to degrade gracefully when an optional tool
-isn't installed — a missing binary is skipped, not a fatal error.
+between macOS (AeroSpace) and Linux (GNOME + keyd + Alacritty + Vicinae).
+Everything is designed to be symlinked from `$HOME` (or, for `keyd`, from
+`/etc/keyd/`) and to degrade gracefully when an optional tool isn't installed
+— a missing binary is skipped, not a fatal error.
 
 The Linux side is this setup's real desktop config, but its core defaults
-are portable — host-specific app classes, wallpaper paths, and headset
-device names are called out inline and in each directory's README rather
-than hidden or faked.
+are portable — host-specific app classes and keyboard-device IDs are called
+out inline and in each directory's README rather than hidden or faked.
 
 Linux setups here assume `apt` (Debian/Ubuntu) and never require Homebrew —
 even on macOS, only zsh/tmux/git are ever assumed; everything else is
@@ -23,21 +22,14 @@ optional and checked with `command -v` before use.
 ├── AGENTS.md            Index for an AI agent asked to install this repo
 ├── install.sh           Idempotent bootstrap: detects OS, symlinks + installs
 ├── .aerospace.toml      AeroSpace tiling window manager config (macOS)
-├── i3/
-│   ├── config            i3 config (Linux/Debian)
-│   ├── i3status/status.py  Custom Python i3bar status line
-│   └── README.md          Install, required edits, package list
 ├── gnome/
 │   ├── dconf.ini          Declarative GNOME workspaces/keybindings
 │   ├── apply.sh           Apply/dump GNOME settings
 │   ├── xdg-terminals.list GNOME default-terminal selection
 │   └── README.md          GNOME parity and sync workflow
 ├── keyd/                 System-wide (/etc/keyd/) Mac-keyboard remap
-├── picom/                Compositor config, tuned for old Intel iGPUs
 ├── alacritty/            Terminal emulator config
-├── pipewire/             Headset RNNoise filter + Firefox mic routing
 ├── bin/                  Scripts symlinked onto $PATH (~/.local/bin)
-├── raycast/              Raycast Script Command for AeroSpace pause/resume
 ├── .tmux.conf           Portable tmux config (see tmux/README.md for setup)
 ├── tmux/
 │   ├── README.md        tmux-specific install/plugin instructions
@@ -57,7 +49,6 @@ optional and checked with `command -v` before use.
 └── .omp/agent/
     ├── config.yml       Oh My Pi UI/theme/model-role settings
     ├── models.yml       Custom model provider definitions (reads secrets via 1Password CLI)
-    ├── mcp.json         MCP server config (currently empty; see bin/styleguard/)
     ├── extensions/      Native OMP extensions
     └── skills/          Custom omp skills
 ```
@@ -76,13 +67,12 @@ macOS only:
 
 Linux/Debian: no package manager requirement beyond `apt` — every
 integration below installs from `apt`, a `.deb`, or a plain binary/script.
-Full package list for the Linux desktop stack:
+Packages for the retained GNOME desktop setup:
 
 ```sh
-sudo apt install i3 i3-wm i3lock i3status python3 dex feh picom rofi \
-  xss-lock network-manager network-manager-gnome pulseaudio-utils \
+sudo apt install rofi network-manager network-manager-gnome pulseaudio-utils \
   alacritty pipewire pipewire-audio-client-libraries wireplumber \
-  zsh git jq tmux fd-find thefuck
+  zsh git tmux fd-find thefuck
 ```
 
 On Debian 13+ and Ubuntu releases that package it, `keyd` is available with
@@ -90,9 +80,9 @@ On Debian 13+ and Ubuntu releases that package it, `keyd` is available with
 stable release from upstream (see [`keyd/README.md`](keyd/README.md)). The
 bootstrap installs its build prerequisites and builds it automatically when
 apt has no `keyd` package.
-RNNoise noise cancellation needs a LADSPA plugin not in Debian's repos — see
-[`pipewire/README.md`](pipewire/README.md); skip it if you don't have the
-same USB headset.
+
+PipeWire remains part of the Linux desktop's normal audio stack; this repo
+does not ship headset-specific PipeWire filters or routing overrides.
 
 Everything else referenced below is optional — each integration checks
 `command -v` before doing anything, so an uninstalled tool is silently
@@ -240,8 +230,7 @@ and per-OS credential storage.
 
 ### Window manager and Linux desktop stack
 
-Pick the one for your OS — bindings, workspace layout, and window rules are
-kept in parity between the two (documented inline where they diverge).
+Choose the configuration for your OS.
 
 #### macOS: AeroSpace
 
@@ -252,62 +241,29 @@ ln -sfn "$HOME/my-setup/.aerospace.toml" "$HOME/.aerospace.toml"
 
 The config uses semantic `main`/`secondary` monitor selectors and `$HOME`-
 relative helper script paths, so it doesn't hardcode a username or machine
-name. It does reference machine-specific helper scripts under
+name. It references machine-specific helper scripts under
 `~/.config/aerospace/*.sh` (e.g. `ghostty.sh`, `finder-single.sh`,
 `obsidian-fullscreen.sh`, `coteditor-single.sh`, `focus-cards-layout.sh`) and
-a handful of app bundle IDs (Ghostty, Chrome, Slack, Obsidian, 1Password,
-etc.) — adjust `on-window-detected` rules for the apps installed on your
-machine. Reload with `alt-shift-e` after editing.
+app bundle IDs — adjust `on-window-detected` rules for your installed apps.
+Reload with `alt-shift-e` after editing.
 
-`raycast/toggle-aerospace.sh` calls `aerospace enable toggle`. Add
-`$HOME/my-setup/raycast` in Raycast under **Settings → Script Commands → Add
-Script Directory**. Then find **Toggle AeroSpace** in Root Search, press `⌘K`,
-choose **Configure Command → Record Hotkey**, and assign one global shortcut.
-Use Raycast for the shortcut: AeroSpace stops intercepting keys when disabled,
-so an AeroSpace binding cannot re-enable it. Disabling AeroSpace also moves
-windows from hidden AeroSpace workspaces into the visible area.
+#### Linux/Debian: GNOME + keyd + Alacritty
 
-#### Linux/Debian: i3 or GNOME + keyd + picom + Alacritty + PipeWire
-
-```sh
-sudo apt install i3 i3-wm i3lock i3status python3 dex feh picom rofi \
-  xss-lock network-manager network-manager-gnome pulseaudio-utils
-
-mkdir -p "$HOME/.config/i3" "$HOME/.config/i3status"
-ln -sfn "$HOME/my-setup/i3/config" "$HOME/.config/i3/config"
-ln -sfn "$HOME/my-setup/i3/i3status/status.py" "$HOME/.config/i3status/status.py"
-```
-
-Then set up each companion piece — every one has its own README with
-install commands and the values you need to adjust for your machine:
+The bootstrap installs the retained Linux desktop packages, links the
+Alacritty and keyd configs, and applies the GNOME settings when it runs in a
+GNOME dconf session. It does not switch sessions. Otherwise run
+`~/.local/bin/my-setup-gnome` after logging into GNOME.
 
 - [`keyd/README.md`](keyd/README.md) — system-wide (`/etc/keyd/`, needs
-  `sudo`) Mac-keyboard remap: Option/Alt stays the i3 leader, Command behaves
-  like Ctrl for application shortcuts, and Command+Space maps to Super+Space
-  (rofi in i3, Vicinae in GNOME); Caps Lock → F13 toggles fullscreen in i3.
-- [`picom/README.md`](picom/README.md) — low-overhead compositor config
-  without GPU-specific driver flags.
-- [`alacritty/README.md`](alacritty/README.md) — terminal emulator,
-  launched by `i3/config`'s `$mod+Return` via `bin/alacritty`, which shadows
-  the plain `alacritty` command on `$PATH`; explicit terminal-command launches
-  pass through to preserve `xdg-terminal-exec` behavior.
-- [`pipewire/README.md`](pipewire/README.md) — optional: a specific USB
-  headset's RNNoise filter and a Firefox ESR mic-routing quirk fix. Skip
-  entirely without that hardware/browser.
-- [`bin/README.md`](bin/README.md) — `alacritty`, `audio-control`,
-  `noise-cancel`, symlinked onto `$PATH`; the zsh aliases that wrap them
-  are only defined when the scripts are actually present.
-- [`i3/README.md`](i3/README.md) — the AeroSpace-parity X11 window-manager
-  config, including host-specific app classes, wallpaper, the GeistMono Nerd
-  Font, and the differences i3 cannot replicate.
-- [`gnome/README.md`](gnome/README.md) — the GNOME companion config with
-  fixed named workspaces, matching Alt/Option workspace chords, Vicinae
-  app search and clipboard history, Alacritty, and keyd/Caps Lock behavior.
-
-Select either "i3" or the normal GNOME session from your display manager.
-The installer does not switch sessions. GNOME settings are applied when the
-installer runs inside a GNOME dconf session; otherwise run
-`~/.local/bin/my-setup-gnome` after logging into GNOME.
+  `sudo`) Mac-keyboard remap: Command shortcuts, Command+Space for Vicinae,
+  and Caps Lock → F13 for GNOME fullscreen.
+- [`alacritty/README.md`](alacritty/README.md) — terminal configuration and
+  the tmux-backed launcher.
+- [`gnome/README.md`](gnome/README.md) — fixed workspaces, Alt/Option
+  workspace chords, Vicinae app search and clipboard history, Alacritty, and
+  keyd/Caps Lock behavior.
+- [`bin/README.md`](bin/README.md) — the Alacritty launcher and styleguard
+  CLI.
 
 ### Oh My Pi (`omp`) agent
 
@@ -316,36 +272,32 @@ once — it holds `agent.db`/`history.db`/`models.db`, `sessions/`, `blobs/`,
 `cache/`, and `terminal-sessions/` alongside the config. Never symlink the
 whole directory (`ln -sfn .../agent ~/.omp/agent`) — that replaces all of
 it, including your session history and caches, with just this repo's tracked
-files. Symlink `config.yml`, `models.yml`, `mcp.json`, `extensions/`, and
-`skills/` individually instead, leaving everything else in place:
+files. Symlink `config.yml`, `models.yml`, `extensions/`, and `skills/`
+individually instead, leaving everything else in place:
 
 ```sh
 mkdir -p "$HOME/.omp/agent"
 ln -sfn "$HOME/my-setup/.omp/agent/config.yml" "$HOME/.omp/agent/config.yml"
 ln -sfn "$HOME/my-setup/.omp/agent/models.yml" "$HOME/.omp/agent/models.yml"
-ln -sfn "$HOME/my-setup/.omp/agent/mcp.json"   "$HOME/.omp/agent/mcp.json"
 ln -sfn "$HOME/my-setup/.omp/agent/extensions" "$HOME/.omp/agent/extensions"
 ln -sfn "$HOME/my-setup/.omp/agent/skills"     "$HOME/.omp/agent/skills"
 ```
 
-If `~/.omp/agent/config.yml` (or `models.yml`/`mcp.json`/`extensions/`/
-`skills/`) already exists as a real file/directory, back it up first
-(`cp -a` it somewhere) before the `ln -sfn` — `ln -sfn` on an existing real
-file replaces it outright, and on an existing real *directory* it symlinks
-into it instead of replacing it, which silently produces a stray nested
-symlink rather than the intended swap. Remove the real directory first if
-that's the case.
+If `~/.omp/agent/config.yml` (or `models.yml`/`extensions/`/`skills/`)
+already exists as a real file/directory, back it up first (`cp -a` it
+somewhere) before the `ln -sfn` — `ln -sfn` on an existing real file
+replaces it outright, and on an existing real *directory* it symlinks into
+it instead of replacing it, which silently produces a stray nested symlink
+rather than the intended swap. Remove the real directory first if that's the
+case.
 
 `config.yml` holds UI/theme/model-role preferences. `models.yml` declares
 custom model providers; API keys are resolved at runtime through the
 [1Password CLI](https://developer.1password.com/docs/cli/) (`op read
 op://...`), so no secret is stored in this repo — install and sign in to
-`op` for those providers to work. `mcp.json` declares OMP's MCP servers and
-is currently empty (kept symlinked for future use, see `bin/styleguard/` for
-this repo's actual Winston AI AI-detection integration, a standalone CLI
-rather than an MCP server).
-`extensions/` contains the native Perplexity Search API web-search override;
-`skills/` contains custom omp skills.
+`op` for those providers to work. `extensions/` contains the native
+Perplexity Search API web-search override; `skills/` contains custom omp
+skills.
 Web search uses the native Perplexity Search API override rather than the
 deprecated Sonar chat-completions path. It calls
 `https://api.perplexity.ai/search`, requests detailed context, and returns
@@ -360,13 +312,6 @@ installing/signing in to `op`.
 
 ## Notes
 
-- Nothing here hardcodes a username or absolute machine path outside
-  `$HOME`, with one documented exception:
-  `pipewire/pipewire.conf.d/60-me6s-voice-isolation.conf`'s LADSPA plugin
-  path, because PipeWire's config format doesn't expand environment
-  variables — see [`pipewire/README.md`](pipewire/README.md).
-- Every shell/tmux/git/i3 integration is written to no-op when its target
-  binary isn't installed, so you can adopt pieces incrementally.
 - **No hardcoded API keys, tokens, or credentials anywhere in this repo.**
   `.omp/agent/models.yml` resolves secrets through the 1Password CLI at
   runtime; `git/.gitconfig` deliberately excludes identity/signing

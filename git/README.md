@@ -59,7 +59,7 @@ gpg-connect-agent updatestartuptty /bye
 
 Debian also needs a pinentry program installed for the passphrase prompt to
 appear at all: `sudo apt install pinentry-curses` (TTY prompt) or
-`pinentry-gnome3` (graphical, under a desktop session/i3 with a keyring
+`pinentry-gnome3` (graphical, under a GNOME desktop session with a keyring
 agent running).
 
 ## Credential storage
