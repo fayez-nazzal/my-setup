@@ -11,7 +11,7 @@
 # keyboard contract, while machine-specific values belong in the selectors below.
 #
 # Current workspace usage:
-#   G -> Terminal (Ghostty)      1 -> Editor (Zed)       3 -> Editor (Cursor)
+#   G -> Terminal (Alacritty)   1 -> Editor (Zed)       3 -> Editor (Cursor)
 #   2 -> Browser (Chrome)        4 -> MS Teams (all windows) O -> Obsidian
 #   S -> Safari                  X -> XMind
 #   Q, W -> free for anything else
@@ -36,7 +36,7 @@ persistent-workspaces = ['1', '2', '3', '4', 'G', 'P', 'O', 'X', 'S', 'Q', 'W']
 # easy to move/share. The first matching callback wins unless it opts in to
 # check-further-callbacks.
 on-window-detected = [
-  { if.app-id = 'com.mitchellh.ghostty', run = ['layout tiling', 'move-node-to-workspace G'] },
+  { if.app-id = 'org.alacritty', run = ['layout tiling', 'move-node-to-workspace G'] },
   { if.app-id = 'com.google.Chrome', run = ['move-node-to-workspace 2'] },
   { if.app-id = 'dev.zed.Zed', run = ['move-node-to-workspace 1'] },
   { if.app-name-regex-substring = 'Cursor', run = ['move-node-to-workspace 3'] },
@@ -56,8 +56,8 @@ outer.top = 8
 outer.bottom = 8
 
 [mode.main.binding]
-# Smart Ghostty summon: focus the single window if open, else launch it.
-alt-enter = 'exec-and-forget $HOME/.config/aerospace/ghostty.sh'
+# Focus Alacritty if open; otherwise launch it.
+alt-enter = 'exec-and-forget "$HOME/.local/bin/aerospace-alacritty"'
 
 # i3-style focus wrapping.
 alt-j = 'focus --boundaries-action wrap-around-the-workspace left'

@@ -11,16 +11,16 @@ The Linux side is this setup's real desktop config, but its core defaults
 are portable — host-specific app classes and keyboard-device IDs are called
 out inline and in each directory's README rather than hidden or faked.
 
-Linux setups here assume `apt` (Debian/Ubuntu) and never require Homebrew —
-even on macOS, only zsh/tmux/git are ever assumed; everything else is
-optional and checked with `command -v` before use.
+Linux desktop package automation is APT-only (Debian/Ubuntu); other Linux
+distributions retain portable configuration links and supported user-local
+routes. On macOS, Homebrew is optional and bootstrapped only after consent.
 
 ## Layout
 
 ```
 .
 ├── AGENTS.md            Index for an AI agent asked to install this repo
-├── install.sh           Idempotent bootstrap: detects OS, symlinks + installs
+├── install.sh           Interactive Bun/OpenTUI installer
 ├── .aerospace.toml      AeroSpace tiling window manager config (macOS)
 ├── gnome/
 │   ├── dconf.ini          Declarative GNOME workspaces/keybindings
@@ -61,52 +61,55 @@ Core, both platforms:
 - git
 
 macOS only:
+- [Homebrew](https://brew.sh/) — optional on macOS, where supported recipes
+  prefer it. The installer asks before bootstrapping it. Linux never
+  bootstraps Homebrew, though an existing Linuxbrew installation is usable.
 
-- [Homebrew](https://brew.sh/) — used for AeroSpace, `zsh-abbr`, and
-  optional CLI tools. Not used, and not required, on Linux.
-
-Linux/Debian: no package manager requirement beyond `apt` — every
-integration below installs from `apt`, a `.deb`, or a plain binary/script.
-Packages for the retained GNOME desktop setup:
+Linux/Debian: native package installation is APT-only. The optional Linux
+desktop bundle provides this repository's audio/network/rofi setup:
 
 ```sh
 sudo apt install rofi network-manager network-manager-gnome pulseaudio-utils \
-  alacritty pipewire pipewire-audio-client-libraries wireplumber \
-  zsh git tmux fd-find thefuck
+  pipewire pipewire-audio-client-libraries wireplumber
 ```
 
-On Debian 13+ and Ubuntu releases that package it, `keyd` is available with
-`sudo apt install keyd`; older Debian/Ubuntu releases must build the latest
-stable release from upstream (see [`keyd/README.md`](keyd/README.md)). The
-bootstrap installs its build prerequisites and builds it automatically when
-apt has no `keyd` package.
+Core tools, Alacritty, Geist Mono Nerd Font, and keyd appear as separate
+installer choices. When APT has no `keyd` candidate, the installer offers the
+documented stable upstream source route (see [`keyd/README.md`](keyd/README.md)).
+Non-APT Linux remains usable for portable configuration links and verified
+user-local routes; unsupported package choices stay disabled.
 
 PipeWire remains part of the Linux desktop's normal audio stack; this repo
 does not ship headset-specific PipeWire filters or routing overrides.
 
-Everything else referenced below is optional — each integration checks
-`command -v` before doing anything, so an uninstalled tool is silently
-skipped.
-
 ## Setup
 
-Clone the repo, then either run the bootstrap script or symlink the
-pieces you want by hand.
+Clone the repo, then run the interactive installer or symlink selected
+pieces by hand.
 
 ```sh
 git clone git@github.com:fayez-nazzal/my-setup.git "$HOME/my-setup"
 "$HOME/my-setup/install.sh"
 ```
 
-`install.sh` is idempotent (safe to re-run), detects your OS, symlinks
-every piece below, backs up any pre-existing real file/directory it
-would otherwise replace, and installs what it safely can (packages,
-plugins, recommended CLI tools). It deliberately does **not** invent a
-personal identity, hardware ID, or secret, and does **not** apply one
-machine's hardware-specific values (monitor names, window classes,
-device IDs) to another — it prints exactly what still needs your input
-in a "needs your attention" summary at the end. An AI coding agent
+`install.sh` starts an OS-aware checklist. Supported choices begin selected;
+Space toggles a choice and Enter applies the selected work. Existing software
+is detected before installation, and conflicting user files are retained in
+a private backup directory before links are replaced. `--dry-run` shows the
+selected operations without changing component state; `--help` does not
+bootstrap prerequisites. The installer does not invent identity, secrets, or
+hardware IDs, and does not change the login shell. It reports blocked work
+and remaining prerequisites under "Needs your attention". An AI coding agent
 asked to set this repo up should read [`AGENTS.md`](AGENTS.md) first.
+
+The software list includes **Volta** (installed from the official
+`https://get.volta.sh` script with `--skip-setup` into `~/.volta`, since
+`zsh/.zshenv` already exports `VOLTA_HOME` and puts `$VOLTA_HOME/bin` on
+`PATH`) and **Node LTS (via Volta)**, which runs `volta install node` to
+download the current LTS as Volta's default runtime. Selecting Node LTS also
+selects Volta; a healthy Volta or an existing Volta default Node is left
+alone. A Node installed some other way does not count: Node here is always
+Volta-managed.
 
 The sections below explain what each piece does and how to do it by
 hand instead, if you'd rather not run the script (or need to adjust one
@@ -240,19 +243,17 @@ ln -sfn "$HOME/my-setup/.aerospace.toml" "$HOME/.aerospace.toml"
 ```
 
 The config uses semantic `main`/`secondary` monitor selectors and `$HOME`-
-relative helper script paths, so it doesn't hardcode a username or machine
-name. It references machine-specific helper scripts under
-`~/.config/aerospace/*.sh` (e.g. `ghostty.sh`, `finder-single.sh`,
-`obsidian-fullscreen.sh`, `coteditor-single.sh`, `focus-cards-layout.sh`) and
-app bundle IDs — adjust `on-window-detected` rules for your installed apps.
-Reload with `alt-shift-e` after editing.
+relative helper paths. Its shipped Alt+Enter helper focuses the existing
+Alacritty window or launches `~/.local/bin/alacritty`; adjust app bundle IDs
+in `on-window-detected` for installed apps. Reload with `alt-shift-e` after
+editing.
 
 #### Linux/Debian: GNOME + keyd + Alacritty
 
-The bootstrap installs the retained Linux desktop packages, links the
-Alacritty and keyd configs, and applies the GNOME settings when it runs in a
-GNOME dconf session. It does not switch sessions. Otherwise run
-`~/.local/bin/my-setup-gnome` after logging into GNOME.
+The installer exposes this Linux APT desktop bundle, keyd configuration,
+Alacritty configuration, and GNOME settings application as separate choices.
+GNOME settings are applied only when selected from an active dconf session.
+Otherwise run `~/.local/bin/my-setup-gnome` after logging into GNOME.
 
 - [`keyd/README.md`](keyd/README.md) — system-wide (`/etc/keyd/`, needs
   `sudo`) Mac-keyboard remap: Command shortcuts, Command+Space for Vicinae,

@@ -5,3 +5,5 @@
 
 # omp runtime lock files (per-machine, not shared config).
 .omp/agent/*.lock
+installer/node_modules/
+installer/.bootstrap-lock-hash

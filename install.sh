@@ -1,594 +1,68 @@
 #!/usr/bin/env bash
-# Bootstrap installer for this repo. Idempotent — safe to re-run.
-#
-# What this deliberately does NOT do:
-#   - invent a personal identity, hardware ID, or secret on your behalf
-#   - overwrite a pre-existing real file/directory without backing it up
-#   - blindly apply one machine's hardware-specific values to another
-# Anything it can't safely automate is printed in the "needs your
-# attention" summary at the end, with a pointer to the relevant README.
-
 set -euo pipefail
-
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PATH="$HOME/.local/bin:$HOME/.bun/bin:$PATH"
-BACKUP_DIR=""
-NEEDS_ATTENTION=()
-
-log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
-warn() { printf '\033[1;33m!!\033[0m %s\n' "$*" >&2; }
-note() { NEEDS_ATTENTION+=("$*"); }
-has_keyd() {
-  command -v keyd >/dev/null 2>&1 || command -v keyd.rvaiya >/dev/null 2>&1
-}
-
-# Ensures $BACKUP_DIR exists (created lazily, once per run).
-backup_dir() {
-  if [ -z "$BACKUP_DIR" ]; then
-    BACKUP_DIR="$HOME/.dotfiles-backup-$(date +%Y%m%d-%H%M%S)"
-    mkdir -p "$BACKUP_DIR"
-    log "Backing up any replaced files to $BACKUP_DIR"
-  fi
-}
-
-rel_home() { printf '%s' "${1#"$HOME"/}"; }
-
-# backup_existing DST — if DST is a real file/dir, copy it into
-# $BACKUP_DIR and remove it (returns 0). If DST is already a symlink,
-# just remove it (returns 1, nothing worth backing up). If DST doesn't
-# exist, no-op (returns 1).
-backup_existing() {
-  dst=$1
-  if [ -L "$dst" ]; then
-    rm -f "$dst"
-    return 1
-  fi
-  if [ -e "$dst" ]; then
-    backup_dir
-    rel=$(rel_home "$dst")
-    safe_name=${rel//\//__}
-    cp -a "$dst" "$BACKUP_DIR/$safe_name"
-    rm -rf "$dst"
-    note "Backed up existing $dst to $BACKUP_DIR/$safe_name"
-    return 0
-  fi
-  return 1
-}
-
-# link SRC DST — symlink DST -> SRC, backing up a pre-existing real
-# file/directory first. No-op if DST already points at SRC.
-link() {
-  src=$1
-  dst=$2
-  if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
-    return 0
-  fi
-  mkdir -p "$(dirname "$dst")"
-  backup_existing "$dst" || true
-  ln -sfn "$src" "$dst"
-  log "linked $dst -> $src"
-}
-
-scan_backup_for_secrets() {
-  [ -n "$BACKUP_DIR" ] || return 0
-  found=$(grep -rEl \
-    "sk-[A-Za-z0-9]{10,}|ghp_[A-Za-z0-9]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|BEGIN (RSA|OPENSSH|PGP) PRIVATE KEY|AKIA[0-9A-Z]{16}" \
-    "$BACKUP_DIR" 2>/dev/null || true)
-  if [ -n "$found" ]; then
-    note "Possible plaintext secret(s) found in your backed-up files — move each to the untracked local file its README names, then rotate the secret:"
-    while IFS= read -r f; do note "    $f"; done <<EOF
-$found
-EOF
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# Cross-platform pieces
-# ---------------------------------------------------------------------------
-
-install_zsh() {
-  log "zsh: symlinking dotfiles"
-  had_real_config=false
-  if [ -e "$HOME/.config/zsh" ] && [ ! -L "$HOME/.config/zsh" ]; then
-    had_real_config=true
-  fi
-
-  link "$REPO_DIR/zsh/.zshenv"     "$HOME/.zshenv"
-  link "$REPO_DIR/zsh/.zprofile"   "$HOME/.zprofile"
-  link "$REPO_DIR/zsh/.zshrc"      "$HOME/.zshrc"
-  link "$REPO_DIR/zsh/.config/zsh" "$HOME/.config/zsh"
-
-  if [ "$had_real_config" = true ]; then
-    backed_up="$BACKUP_DIR/.config__zsh"
-    if [ -f "$backed_up/local.zsh" ] && [ ! -e "$REPO_DIR/zsh/.config/zsh/local.zsh" ]; then
-      cp "$backed_up/local.zsh" "$REPO_DIR/zsh/.config/zsh/local.zsh"
-      chmod 600 "$REPO_DIR/zsh/.config/zsh/local.zsh"
-      note "Migrated your previous ~/.config/zsh/local.zsh into the repo's (git-ignored) zsh/.config/zsh/local.zsh."
-    fi
-    note "Your previous ~/.config/zsh was backed up to $backed_up — check it for anything else worth keeping."
-  fi
-  note "Review your backed-up .zshrc/.zshenv/.zprofile (if any) for custom lines worth keeping — add them under zsh/.config/zsh/rc.d/ or profile.d/, or zsh/.config/zsh/local.zsh for anything machine-local. Never put a secret in a tracked rc.d file."
-  if [ "$(uname -s)" = Linux ] && command -v getent >/dev/null 2>&1; then
-    login_user=${USER:-$(id -un)}
-    login_shell=$(getent passwd "$login_user" | cut -d: -f7)
-    zsh_path=$(command -v zsh || true)
-    if [ -n "$zsh_path" ] && [ "$login_shell" != "$zsh_path" ]; then
-      note "zsh config is linked, but the login shell is $login_shell — run 'chsh -s $zsh_path' to use it by default."
-    fi
-  fi
-}
-
-install_git() {
-  log "git: symlinking portable config"
-  had_real_gitconfig=false
-  if [ -e "$HOME/.gitconfig" ] && [ ! -L "$HOME/.gitconfig" ]; then
-    had_real_gitconfig=true
-  fi
-
-  link "$REPO_DIR/git/.gitconfig" "$HOME/.gitconfig"
-
-  if [ "$had_real_gitconfig" = true ] && [ ! -e "$HOME/.gitconfig.local" ]; then
-    backed_up="$BACKUP_DIR/.gitconfig"
-    if [ -f "$backed_up" ]; then
-      cp "$backed_up" "$HOME/.gitconfig.local"
-      chmod 600 "$HOME/.gitconfig.local"
-      note "Migrated your previous ~/.gitconfig (identity/signing key/etc.) to ~/.gitconfig.local — review it (git/README.md)."
-    fi
-  fi
-  if [ ! -e "$HOME/.gitconfig.local" ]; then
-    note "No ~/.gitconfig.local yet — create one with your name/email (and signing key, if you sign commits). Not auto-created: this script won't invent your identity. See git/README.md."
-  fi
-}
-
-install_tmux() {
-  log "tmux: symlinking config"
-  link "$REPO_DIR/.tmux.conf" "$HOME/.tmux.conf"
-
-  if ! command -v tmux >/dev/null 2>&1; then
-    note "tmux isn't installed — install it, then re-run this script."
-    return 0
-  fi
-
-  if [ ! -d "$HOME/.tmux/plugins/tpm" ]; then
-    log "tmux: cloning TPM"
-    mkdir -p "$HOME/.tmux/plugins"
-    git clone --quiet https://github.com/tmux-plugins/tpm "$HOME/.tmux/plugins/tpm"
-  fi
-
-  log "tmux: installing TPM plugins (isolated tmux server — never touches a real running session)"
-
-  scopes_before=""
-  if [ -f "$REPO_DIR/tmux/tmux-scopes.conf" ]; then
-    scopes_before=$(cat "$REPO_DIR/tmux/tmux-scopes.conf")
-  fi
-
-  real_tmux=$(command -v tmux)
-  bootstrap_socket="my_setup_bootstrap_$$"
-  scratch_scopes=$(mktemp)
-  wrapper_dir=$(mktemp -d)
-  # Every `tmux` call TPM's installer makes internally (it spawns panes to
-  # run each plugin's install script) must land on our throwaway server,
-  # never the user's real one — force that via a PATH-shadowing shim
-  # instead of relying on install_plugins accepting a -L flag itself.
-  cat > "$wrapper_dir/tmux" <<EOF
-#!/bin/sh
-exec "$real_tmux" -L "$bootstrap_socket" "\$@"
-EOF
-  chmod +x "$wrapper_dir/tmux"
-
-  TMUXSCOPE_CONFIG="$scratch_scopes" PATH="$wrapper_dir:$PATH" \
-    "$real_tmux" -L "$bootstrap_socket" -f "$HOME/.tmux.conf" new-session -d -s bootstrap -x 80 -y 24 2>/dev/null || true
-  TMUXSCOPE_CONFIG="$scratch_scopes" PATH="$wrapper_dir:$PATH" \
-    "$HOME/.tmux/plugins/tpm/bin/install_plugins" >/dev/null 2>&1 \
-    || warn "tmux: TPM plugin install failed — run ~/.tmux/plugins/tpm/bin/install_plugins inside a real tmux session"
-  sleep 1
-  "$real_tmux" -L "$bootstrap_socket" kill-server 2>/dev/null || true
-  rm -f "${TMUX_TMPDIR:-/tmp}/tmux-$(id -u)/$bootstrap_socket" 2>/dev/null || true
-  rm -rf "$wrapper_dir" "$scratch_scopes"
-
-  if [ -f "$REPO_DIR/tmux/tmux-scopes.conf" ] && [ "$(cat "$REPO_DIR/tmux/tmux-scopes.conf")" != "$scopes_before" ]; then
-    printf '%s\n' "$scopes_before" > "$REPO_DIR/tmux/tmux-scopes.conf"
-    warn "tmuxscope rewrote the tracked tmux/tmux-scopes.conf during plugin install despite isolation — reverted it automatically. Please report this upstream if it recurs."
-  fi
-
-  # Now that plugins are installed, reload config into a real running
-  # session too (if one exists) so it picks up the plugin option changes.
-  if tmux list-sessions >/dev/null 2>&1; then
-    tmux source-file "$HOME/.tmux.conf" 2>/dev/null || true
-  fi
-
-  if command -v bun >/dev/null 2>&1; then
-    tmuxscope_dir="$HOME/repos/tools/tmuxscope"
-    if [ ! -d "$tmuxscope_dir" ]; then
-      log "tmux: building tmuxscope (no published package — see tmux/README.md)"
-      mkdir -p "$HOME/repos/tools"
-      git clone --quiet https://github.com/fayez-nazzal/tmuxscope.git "$tmuxscope_dir" \
-        || warn "tmuxscope clone failed — see tmux/README.md"
-    fi
-    if [ -d "$tmuxscope_dir" ]; then
-      (cd "$tmuxscope_dir" && bun install --silent && bun run build && bun link) \
-        || warn "tmuxscope build failed — see tmux/README.md"
-      if [ -x "$tmuxscope_dir/dist/tmuxscope" ]; then
-        mkdir -p "$HOME/.local/bin"
-        link "$tmuxscope_dir/dist/tmuxscope" "$HOME/.local/bin/tmuxscope"
-      fi
-    fi
-  else
-    note "tmuxscope needs Bun (not found) — install Bun, then re-run this script (see tmux/README.md)."
-  fi
-
-  link "$REPO_DIR/tmux/tmux-scopes.conf" "$HOME/.config/tmux-scopes.conf"
-  note "tmux-scopes.conf's scope patterns are one person's project layout — edit them for yours (tmux/README.md)."
-}
-
-install_zsh_abbr() {
-  if command -v zsh-abbr >/dev/null 2>&1 || [ -r "$HOME/.config/zsh-abbr/zsh-abbr.zsh" ]; then
-    return 0
-  fi
-  if command -v brew >/dev/null 2>&1; then
-    log "zsh-abbr: installing via Homebrew"
-    brew install olets/tap/zsh-abbr || warn "zsh-abbr: brew install failed"
-  else
-    log "zsh-abbr: cloning (no Homebrew needed)"
-    git clone --quiet https://github.com/olets/zsh-abbr --recurse-submodules \
-      --single-branch --branch main --depth 1 "$HOME/.config/zsh-abbr" \
-      || warn "zsh-abbr: clone failed"
-  fi
-}
-
-install_omp() {
-  log "omp: symlinking config only — never the whole state directory"
-  mkdir -p "$HOME/.omp/agent"
-  link "$REPO_DIR/.omp/agent/config.yml"    "$HOME/.omp/agent/config.yml"
-  link "$REPO_DIR/.omp/agent/models.yml"    "$HOME/.omp/agent/models.yml"
-  link "$REPO_DIR/.omp/agent/extensions"    "$HOME/.omp/agent/extensions"
-  link "$REPO_DIR/.omp/agent/skills"        "$HOME/.omp/agent/skills"
-  link "$REPO_DIR/bin/omp-hide-aws-skills" "$HOME/.local/bin/omp-hide-aws-skills"
-  note "~/.omp/agent/ also holds live runtime state (databases, sessions, caches) once the agent has run. This script only touches config.yml/models.yml/extensions/skills — never symlink the whole agent/ directory."
-}
-
-install_styleguard() {
-  log "styleguard: symlinking CLI onto PATH"
-  mkdir -p "$HOME/.local/bin"
-  link "$REPO_DIR/bin/styleguard/cli.ts" "$HOME/.local/bin/styleguard"
-  if ! command -v bun >/dev/null 2>&1; then
-    warn "styleguard: bun not found on PATH — the symlink is in place but the CLI won't run until bun is installed (https://bun.sh)"
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# Recommended CLI tools (starship/zoxide/fzf/bat/eza), Homebrew where
-# available, sudo-free upstream installers/binaries otherwise.
-# ---------------------------------------------------------------------------
-
-install_bat_binary() {
-  arch=$(uname -m)
-  case "$arch" in
-    x86_64) target="x86_64-unknown-linux-gnu" ;;
-    aarch64|arm64) target="aarch64-unknown-linux-gnu" ;;
-    *) note "bat: unsupported architecture ($arch) for automatic binary install — install manually."; return 0 ;;
-  esac
-  log "bat: installing upstream release binary (no sudo)"
-  work=$(mktemp -d)
-  curl -sSL -o "$work/release.json" https://api.github.com/repos/sharkdp/bat/releases/latest
-  ver=$(sed -n '/"tag_name"/{s/.*"tag_name": *"\([^"]*\)".*/\1/p;q;}' "$work/release.json")
-  if curl -sSL -o "$work/bat.tar.gz" "https://github.com/sharkdp/bat/releases/download/${ver}/bat-${ver}-${target}.tar.gz" \
-    && tar xzf "$work/bat.tar.gz" -C "$work"; then
-    cp "$work"/bat-*/bat "$HOME/.local/bin/bat"
-    chmod +x "$HOME/.local/bin/bat"
-  else
-    warn "bat: download/extract failed"
-  fi
-  rm -rf "$work"
-}
-
-install_eza_binary() {
-  arch=$(uname -m)
-  case "$arch" in
-    x86_64) target="x86_64-unknown-linux-gnu" ;;
-    aarch64|arm64) target="aarch64-unknown-linux-gnu" ;;
-    *) note "eza: unsupported architecture ($arch) for automatic binary install — install manually."; return 0 ;;
-  esac
-  log "eza: installing upstream release binary (no sudo)"
-  work=$(mktemp -d)
-  curl -sSL -o "$work/release.json" https://api.github.com/repos/eza-community/eza/releases/latest
-  ver=$(sed -n '/"tag_name"/{s/.*"tag_name": *"\([^"]*\)".*/\1/p;q;}' "$work/release.json")
-  if curl -sSL -o "$work/eza.tar.gz" "https://github.com/eza-community/eza/releases/download/${ver}/eza_${target}.tar.gz" \
-    && tar xzf "$work/eza.tar.gz" -C "$work"; then
-    cp "$work/eza" "$HOME/.local/bin/eza"
-    chmod +x "$HOME/.local/bin/eza"
-  else
-    warn "eza: download/extract failed"
-  fi
-  rm -rf "$work"
-}
-
-install_recommended_tools() {
-  mkdir -p "$HOME/.local/bin"
-
-  if command -v brew >/dev/null 2>&1; then
-    log "Recommended tools: installing via Homebrew"
-    brew install starship zoxide fzf bat eza fd ripgrep thefuck || warn "brew install had failures"
-    return 0
-  fi
-
-
-  if ! command -v starship >/dev/null 2>&1; then
-    log "starship: installing (user-local, no sudo)"
-    curl -sS https://starship.rs/install.sh | sh -s -- -y -b "$HOME/.local/bin" || warn "starship install failed"
-  fi
-
-  if ! command -v zoxide >/dev/null 2>&1; then
-    log "zoxide: installing (user-local, no sudo)"
-    curl -sSfL https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh | sh || warn "zoxide install failed"
-  fi
-
-  if ! command -v fzf >/dev/null 2>&1; then
-    log "fzf: installing (user-local, no sudo)"
-    if [ ! -d "$HOME/.fzf" ]; then
-      git clone --quiet --depth 1 https://github.com/junegunn/fzf.git "$HOME/.fzf"
-    fi
-    "$HOME/.fzf/install" --bin --no-update-rc >/dev/null || warn "fzf install failed"
-    link "$HOME/.fzf/bin/fzf" "$HOME/.local/bin/fzf"
-  fi
-
-  command -v bat >/dev/null 2>&1 || install_bat_binary
-  command -v eza >/dev/null 2>&1 || install_eza_binary
-
-  if ! command -v fd >/dev/null 2>&1; then
-    if command -v fdfind >/dev/null 2>&1; then
-      link "$(command -v fdfind)" "$HOME/.local/bin/fd"
+usage() { printf 'Usage: %s [--help] [--dry-run]\n' "$0"; }
+case "${1:-}" in --help) usage; exit 0 ;; --dry-run|"") ;; *) printf 'Unsupported argument: %s\n' "$1" >&2; usage >&2; exit 2 ;; esac
+DRY_RUN="${1:-}"
+os="$(uname -s)"; arch="$(uname -m)"
+case "$os" in Darwin|Linux) ;; *) printf 'Unsupported operating system: %s\n' "$os" >&2; exit 1 ;; esac
+case "$arch" in x86_64|arm64|aarch64) ;; *) printf 'Unsupported CPU architecture: %s\n' "$arch" >&2; exit 1 ;; esac
+if [ "$(id -u)" -eq 0 ]; then printf 'Do not run the installer as root.\n' >&2; exit 1; fi
+if [ ! -t 0 ] || [ ! -t 1 ]; then printf 'Interactive installer requires a terminal on stdin and stdout.\n' >&2; exit 1; fi
+prepend_existing() { for candidate in "$HOME/.local/bin" "$HOME/.bun/bin" "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin; do [ ! -d "$candidate" ] || PATH="$candidate:$PATH"; done; }
+prepend_existing; export PATH
+if [ "$DRY_RUN" != --dry-run ] && [ "$os" = Darwin ] && ! command -v brew >/dev/null 2>&1; then
+  printf 'Homebrew not found. Install Homebrew? [y/N] '; read -r answer || answer=n
+  if [[ "$answer" =~ ^[Yy]$ ]]; then
+    if ! command -v curl >/dev/null 2>&1; then printf 'Homebrew bootstrap requires curl; Homebrew-dependent choices will remain unavailable.\n' >&2
     else
-      note "fd not found — install 'fd-find' (Debian) or the equivalent for your distro."
+      tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+      if curl -fL --retry 2 https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$tmp"; then
+        if /bin/bash "$tmp"; then prepend_existing; export PATH
+        else printf 'Homebrew installation failed; continuing with non-Homebrew routes.\n' >&2; fi
+      else printf 'Homebrew download failed; continuing with non-Homebrew routes.\n' >&2; fi
+      rm -f "$tmp"; trap - EXIT
     fi
   fi
-  if ! command -v thefuck >/dev/null 2>&1; then
-    note "thefuck not installed — install it with 'sudo apt install thefuck' (or pipx)."
-  fi
-}
-
-# ---------------------------------------------------------------------------
-# OS-specific window manager stacks
-# ---------------------------------------------------------------------------
-
-install_macos_desktop() {
-  log "macOS: AeroSpace"
+fi
+bun_path="$(command -v bun || true)"
+if [ -z "$bun_path" ] && command -v brew >/dev/null 2>&1 && brew list --formula --versions bun >/dev/null 2>&1; then
+  prefix="$(brew --prefix bun 2>/dev/null || true)"
+  if [ -n "$prefix" ] && [ -x "$prefix/bin/bun" ]; then bun_path="$prefix/bin/bun"
+  else printf 'Homebrew reports Bun installed but its executable is missing; repair the Homebrew Bun installation.\n' >&2; exit 1; fi
+fi
+bun_ok=false
+if [ -n "$bun_path" ]; then version="$("$bun_path" --version 2>/dev/null || true)"; if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+) ]] && { (( BASH_REMATCH[1] > 1 )) || (( BASH_REMATCH[1] == 1 && BASH_REMATCH[2] >= 3 )); }; then bun_ok=true; fi; fi
+if [ "$bun_ok" != true ]; then
+  if [ "$DRY_RUN" = --dry-run ]; then printf 'Bun >=1.3.0 is required for --dry-run; bootstrap is disabled.\n' >&2; exit 1; fi
+  printf 'Bun >=1.3.0 is required. Install or upgrade Bun? [y/N] '; read -r answer || answer=n
+  if [[ ! "$answer" =~ ^[Yy]$ ]]; then printf 'Install Bun >=1.3.0, then rerun %s.\n' "$0" >&2; exit 1; fi
   if command -v brew >/dev/null 2>&1; then
-    brew install --cask aerospace || warn "brew install aerospace failed"
+    if [ -n "$bun_path" ] && brew list --formula --versions bun >/dev/null 2>&1; then brew upgrade oven-sh/bun/bun || { printf 'Consented Bun upgrade failed.\n' >&2; exit 1; }
+    else brew install oven-sh/bun/bun || { printf 'Bun installation failed.\n' >&2; exit 1; }; fi
   else
-    note "Homebrew not found — install AeroSpace yourself: https://github.com/nikitabobko/AeroSpace"
+    for prerequisite in curl bash unzip; do command -v "$prerequisite" >/dev/null 2>&1 || { printf 'Upstream Bun installer requires %s.\n' "$prerequisite" >&2; exit 1; }; done
+    tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
+    curl -fL --retry 2 https://bun.com/install -o "$tmp" || { printf 'Bun installer download failed.\n' >&2; exit 1; }
+    /bin/bash "$tmp" || { printf 'Bun installation failed.\n' >&2; exit 1; }
+    rm -f "$tmp"; trap - EXIT
   fi
-  link "$REPO_DIR/.aerospace.toml" "$HOME/.aerospace.toml"
-  note ".aerospace.toml references machine-specific helper scripts under ~/.config/aerospace/*.sh (ghostty.sh, finder-single.sh, etc.) this repo doesn't ship, and app bundle IDs for one person's apps — adjust for yours (README.md's AeroSpace section)."
-}
-
-install_linux_packages() {
-  pkgs="rofi network-manager network-manager-gnome pulseaudio-utils alacritty
-    pipewire pipewire-audio-client-libraries wireplumber zsh git tmux fd-find thefuck"
-
-  if command -v apt-cache >/dev/null 2>&1 && apt-cache show keyd >/dev/null 2>&1; then
-    pkgs="$pkgs keyd"
-  else
-    pkgs="$pkgs build-essential"
-  fi
-
-  missing=""
-  if command -v dpkg-query >/dev/null 2>&1; then
-    for pkg in $pkgs; do
-      dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' \
-        || missing="$missing $pkg"
-    done
-  else
-    missing="$pkgs"
-  fi
-  missing=${missing# }
-  [ -n "$missing" ] || {
-    log "Linux packages: already installed"
-    return 0
-  }
-
-  if command -v apt-get >/dev/null 2>&1; then
-    if sudo -n true 2>/dev/null; then
-      log "Installing missing apt packages (passwordless sudo available)"
-      # shellcheck disable=SC2086
-      sudo apt-get install -y $missing || warn "apt-get install had failures — check output above"
-    else
-      note "No passwordless sudo available to this script — install these yourself: sudo apt install $missing"
-    fi
-  else
-    note "No apt-get found — install for your distro: sudo apt install $missing"
-  fi
-}
-
-install_keyd_from_source() {
-  has_keyd && return 0
-  command -v apt-get >/dev/null 2>&1 || return 0
-  if ! command -v apt-cache >/dev/null 2>&1; then
-    note "keyd is missing and apt-cache is unavailable — install keyd manually (keyd/README.md)."
-    return 0
-  fi
-  apt-cache show keyd >/dev/null 2>&1 && return 0
-  if ! sudo -n true 2>/dev/null; then
-    note "keyd isn't packaged for this Debian release and needs sudo to build from upstream source (keyd/README.md)."
-    return 0
-  fi
-  if ! command -v git >/dev/null 2>&1 || ! command -v make >/dev/null 2>&1; then
-    note "keyd needs git and build-essential to build from upstream source (keyd/README.md)."
-    return 0
-  fi
-
-  log "keyd: Debian package unavailable; building the latest stable upstream release"
-  work=$(mktemp -d)
-  if ! curl -fsSL -o "$work/release.json" https://api.github.com/repos/rvaiya/keyd/releases/latest; then
-    note "keyd release lookup failed — install it manually from https://github.com/rvaiya/keyd/releases (keyd/README.md)."
-    rm -rf "$work"
-    return 0
-  fi
-  version=$(sed -n '/"tag_name"/{s/.*"tag_name": *"\([^"]*\)".*/\1/p;q;}' "$work/release.json")
-  if [ -z "$version" ]; then
-    note "keyd release lookup returned no stable tag — install it manually from https://github.com/rvaiya/keyd/releases (keyd/README.md)."
-    rm -rf "$work"
-    return 0
-  fi
-  if git clone --quiet --depth 1 --branch "$version" https://github.com/rvaiya/keyd.git "$work/keyd" \
-    && make -C "$work/keyd" \
-    && sudo make -C "$work/keyd" install; then
-    log "keyd: installed upstream stable release $version"
-  else
-    note "keyd source build/install failed — see the output above and keyd/README.md."
-  fi
-  rm -rf "$work"
-}
-
-install_nerd_font() {
-  command -v fc-match >/dev/null 2>&1 || {
-    note "fontconfig is unavailable — install the GeistMono Nerd Font manually (alacritty/README.md)."
-    return 0
-  }
-  fc-match -f '%{family}' "GeistMono Nerd Font Mono" | grep -q "GeistMono" && return 0
-
-  log "font: installing GeistMono Nerd Font for the Alacritty config"
-  work=$(mktemp -d)
-  if ! curl -fsSL -o "$work/release.json" https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest; then
-    note "Nerd Fonts release lookup failed — install GeistMono manually (alacritty/README.md)."
-    rm -rf "$work"
-    return 0
-  fi
-  version=$(sed -n '/"tag_name"/{s/.*"tag_name": *"\([^"]*\)".*/\1/p;q;}' "$work/release.json")
-  if [ -z "$version" ] || ! curl -fsSL -o "$work/GeistMono.tar.xz" \
-    "https://github.com/ryanoasis/nerd-fonts/releases/download/$version/GeistMono.tar.xz"; then
-    note "GeistMono Nerd Font download failed — install it manually (alacritty/README.md)."
-    rm -rf "$work"
-    return 0
-  fi
-
-  font_dir="$HOME/.local/share/fonts/GeistMono-$version"
-  mkdir -p "$font_dir"
-  if tar xJf "$work/GeistMono.tar.xz" -C "$font_dir" && fc-cache -f "$font_dir" \
-    && fc-match -f '%{family}' "GeistMono Nerd Font Mono" | grep -q "GeistMono"; then
-    log "font: GeistMono Nerd Font is ready"
-  else
-    note "GeistMono Nerd Font install failed — install it manually (alacritty/README.md)."
-  fi
-  rm -rf "$work"
-}
-
-link_system_config() {
-  src=$1
-  dst=$2
-  if sudo test -L "$dst" && [ "$(sudo readlink "$dst")" = "$src" ]; then
-    return 0
-  fi
-  if sudo test -e "$dst" || sudo test -L "$dst"; then
-    note "Left existing $dst untouched; back it up before replacing it with a symlink to $src."
-    return 0
-  fi
-  sudo ln -s "$src" "$dst"
-  log "linked $dst -> $src"
-}
-
-install_linux_desktop() {
-  log "Linux: GNOME + keyd + Alacritty"
-
-  mkdir -p "$HOME/.config/alacritty" "$HOME/.local/bin"
-  link "$REPO_DIR/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
-  link "$REPO_DIR/bin/alacritty" "$HOME/.local/bin/alacritty"
-  install_nerd_font
-
-  install_keyd_from_source
-  if has_keyd && sudo -n true 2>/dev/null; then
-    log "keyd: installing system-wide config (needs sudo)"
-    sudo mkdir -p /etc/keyd
-    link_system_config "$REPO_DIR/keyd/default.conf" /etc/keyd/default.conf
-    if [ -r /proc/bus/input/devices ] && grep -Eq 'Vendor=(004c|05ac) Product=029c' /proc/bus/input/devices; then
-      link_system_config "$REPO_DIR/keyd/apple-magic-keyboard.conf" /etc/keyd/apple-magic-keyboard.conf
-    elif [ -r /proc/bus/input/devices ] && sudo test -L /etc/keyd/apple-magic-keyboard.conf \
-      && [ "$(sudo readlink /etc/keyd/apple-magic-keyboard.conf)" = "$REPO_DIR/keyd/apple-magic-keyboard.conf" ]; then
-      sudo rm -f /etc/keyd/apple-magic-keyboard.conf
-      log "keyd: removed unused Apple Magic Keyboard config symlink"
-    fi
-    sudo systemctl enable --now keyd 2>/dev/null || note "keyd couldn't be enabled — check 'systemctl status keyd' and keyd/README.md."
-  elif ! has_keyd; then
-    note "keyd isn't installed; see keyd/README.md."
-  else
-    note "keyd needs root — run the system-link/service commands in keyd/README.md yourself."
-  fi
-}
-install_gnome_desktop() {
-  log "GNOME: symlinking declarative dconf settings"
-  mkdir -p "$HOME/.config/my-setup" "$HOME/.local/bin"
-  link "$REPO_DIR/gnome/dconf.ini" "$HOME/.config/my-setup/gnome.dconf"
-  link "$REPO_DIR/gnome/xdg-terminals.list" "$HOME/.config/xdg-terminals.list"
-
-  if command -v dconf >/dev/null 2>&1 && [ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]; then
-    "$HOME/.local/bin/my-setup-gnome" apply \
-      || warn "GNOME dconf apply failed — run my-setup-gnome inside a GNOME session"
-  else
-    note "GNOME settings are linked but not applied — run my-setup-gnome inside a GNOME session."
-  fi
-  if ! command -v vicinae >/dev/null 2>&1; then
-    note "Vicinae isn't installed — install it from https://docs.vicinae.com/install/linux; the GNOME Command+Space launcher and clipboard history need it."
-  fi
-  if [[ "${XDG_CURRENT_DESKTOP:-}" == *GNOME* ]]; then
-    if command -v gnome-extensions >/dev/null 2>&1; then
-      enabled_extensions=$(gnome-extensions list --enabled 2>/dev/null || true)
-      if [[ " ${enabled_extensions//$'\n'/ } " != *" vicinae@dagimg-dot "* ]]; then
-        note "Vicinae's GNOME extension is not enabled — install and enable it from https://docs.vicinae.com/quickstart/gnome for clipboard history."
-      fi
-    else
-      note "Install and enable Vicinae's GNOME extension from https://docs.vicinae.com/quickstart/gnome for clipboard history."
-    fi
-  fi
-}
-
-
-
-
-# ---------------------------------------------------------------------------
-main() {
-  log "Bootstrapping from $REPO_DIR"
-  if [ "$(uname -s)" = Linux ]; then
-    install_linux_packages
-  fi
-
-
-  install_zsh
-  install_git
-  install_tmux
-  install_zsh_abbr
-  install_omp
-  install_styleguard
-
-  case "$(uname -s)" in
-    Darwin)
-      install_macos_desktop
-      install_recommended_tools
-      ;;
-    Linux)
-      install_linux_desktop
-      install_gnome_desktop
-      install_recommended_tools
-      ;;
-    *)
-      warn "Unrecognized OS ($(uname -s)) — skipped the window manager and recommended-tool installs. zsh/tmux/git/omp still ran."
-      ;;
-  esac
-
-  scan_backup_for_secrets
-
-  echo
-  log "Done. Needs your attention:"
-  if [ "${#NEEDS_ATTENTION[@]}" -eq 0 ]; then
-    echo "  (nothing)"
-  else
-    for item in "${NEEDS_ATTENTION[@]}"; do
-      printf '  - %s\n' "$item"
-    done
-  fi
-  if [ -n "$BACKUP_DIR" ]; then
-    echo
-    log "Pre-existing files were backed up to: $BACKUP_DIR"
-  fi
-}
-
-main "$@"
+  prepend_existing; export PATH; bun_path="$(command -v bun || true)"; [ -n "$bun_path" ] || bun_path="$HOME/.bun/bin/bun"
+  [ -x "$bun_path" ] || { printf 'Bun installation did not provide an executable.\n' >&2; exit 1; }
+fi
+lock="$REPO_DIR/installer/bun.lock"; hash_file="$REPO_DIR/installer/.bootstrap-lock-hash"
+lock_hash=""
+if [ -f "$lock" ]; then lock_hash="$(cd "$REPO_DIR/installer" && "$bun_path" -e 'import { createHash } from "node:crypto"; import { readFileSync } from "node:fs"; process.stdout.write(createHash("sha256").update(readFileSync("bun.lock")).digest("hex"))')"; fi
+import_ok=false
+if [ -n "$lock_hash" ] && [ -d "$REPO_DIR/installer/node_modules/@opentui/core" ] && (cd "$REPO_DIR/installer" && "$bun_path" -e 'await import("@opentui/core")' >/dev/null 2>&1); then import_ok=true; fi
+if [ "$import_ok" != true ] || [ ! -f "$hash_file" ] || [ "$(cat "$hash_file" 2>/dev/null || true)" != "$lock_hash" ]; then
+  if [ "$DRY_RUN" = --dry-run ]; then printf 'Installer dependencies are missing or stale; --dry-run does not bootstrap them. Run %s normally first.\n' "$0" >&2; exit 1; fi
+  printf 'Installer dependencies are missing, broken, or out of date. Run Bun dependency setup? [y/N] '; read -r answer || answer=n
+  if [[ ! "$answer" =~ ^[Yy]$ ]]; then printf 'Run bun install in %s/installer, then rerun.\n' "$REPO_DIR" >&2; exit 1; fi
+  if [ -f "$lock" ]; then (cd "$REPO_DIR/installer" && "$bun_path" install --frozen-lockfile) || { printf 'Installer dependency installation failed.\n' >&2; exit 1; }
+  else (cd "$REPO_DIR/installer" && "$bun_path" install) || { printf 'Installer dependency installation failed.\n' >&2; exit 1; }; fi
+  (cd "$REPO_DIR/installer" && "$bun_path" -e 'await import("@opentui/core")') >/dev/null 2>&1 || { printf 'OpenTUI import failed after dependency setup.\n' >&2; exit 1; }
+  lock_hash="$(cd "$REPO_DIR/installer" && "$bun_path" -e 'import { createHash } from "node:crypto"; import { readFileSync } from "node:fs"; process.stdout.write(createHash("sha256").update(readFileSync("bun.lock")).digest("hex"))')"
+  printf '%s\n' "$lock_hash" > "$hash_file"
+fi
+exec "$bun_path" run "$REPO_DIR/installer/cli.ts" ${DRY_RUN:+"$DRY_RUN"}

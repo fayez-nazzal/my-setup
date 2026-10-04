@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+find_aerospace() {
+  local candidate
+  candidate="$(command -v aerospace 2>/dev/null || true)"
+  if [ -n "$candidate" ] && [ -x "$candidate" ]; then printf '%s\n' "$candidate"; return 0; fi
+  for candidate in /opt/homebrew/bin/aerospace /usr/local/bin/aerospace; do
+    if [ -x "$candidate" ]; then printf '%s\n' "$candidate"; return 0; fi
+  done
+  return 1
+}
+aerospace="$(find_aerospace)" || { printf 'AeroSpace CLI not found; install AeroSpace and ensure its CLI is on PATH.\n' >&2; exit 127; }
+windows="$("$aerospace" list-windows --monitor all --app-bundle-id org.alacritty --format '%{window-id}')" || { printf 'AeroSpace could not list Alacritty windows.\n' >&2; exit 1; }
+window=""
+while IFS= read -r candidate; do
+  case "$candidate" in ''|*[!0-9]*) continue ;; esac
+  window="$candidate"; break
+done <<EOF
+$windows
+EOF
+if [ -n "$window" ]; then
+  "$aerospace" focus --window-id "$window" || { printf 'AeroSpace could not focus Alacritty window %s.\n' "$window" >&2; exit 1; }
+else
+  exec "$HOME/.local/bin/alacritty"
+fi

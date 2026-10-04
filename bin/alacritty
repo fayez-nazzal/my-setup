@@ -1,31 +1,36 @@
 #!/usr/bin/env bash
-# Shadows the real /usr/bin/alacritty everywhere Alacritty gets launched.
-#
-# This lives at $HOME/.local/bin/alacritty, ahead of /usr/bin on $PATH
-# for interactive shells and GNOME's xdg-terminal-exec launches. It keeps
-# ordinary terminal launches in the persistent tmux session "main".
-#
-# Non-window subcommands pass straight through to the real binary. Explicit
-# `-e`/`--command` launches also pass through so xdg-terminal-exec can run
-# the command it requested instead of opening the persistent tmux session.
 set -euo pipefail
 
-REAL_ALACRITTY=/usr/bin/alacritty # adjust if installed elsewhere (Homebrew, etc.)
-
-case "${1:-}" in
-  msg | migrate | --version | -V | --help | -h)
-    exec "$REAL_ALACRITTY" "$@"
-    ;;
-esac
-
-for arg in "$@"; do
-  case "$arg" in
-    -e | --command)
-      exec "$REAL_ALACRITTY" "$@"
-      ;;
-  esac
+resolve_path() {
+  local path="$1" dir target
+  while [ -L "$path" ]; do
+    dir="$(cd -P "$(dirname "$path")" >/dev/null 2>&1 && pwd)"
+    target="$(readlink "$path")"
+    case "$target" in /*) path="$target" ;; *) path="$dir/$target" ;; esac
+  done
+  dir="$(cd -P "$(dirname "$path")" >/dev/null 2>&1 && pwd)"
+  printf '%s/%s\n' "$dir" "$(basename "$path")"
+}
+self="$(resolve_path "$0")"
+real=""
+old_ifs="$IFS"; IFS=:
+for dir in $PATH; do
+  [ -n "$dir" ] || dir=.
+  candidate="$dir/alacritty"
+  [ -x "$candidate" ] || continue
+  resolved="$(resolve_path "$candidate")"
+  [ "$resolved" = "$self" ] && continue
+  real="$candidate"; break
 done
-
-
-
-exec "$REAL_ALACRITTY" -e tmux new-session -A -s main
+IFS="$old_ifs"
+if [ -z "$real" ] && [ "$(uname -s)" = Darwin ]; then
+  for candidate in "$HOME/Applications/Alacritty.app/Contents/MacOS/alacritty" /Applications/Alacritty.app/Contents/MacOS/alacritty; do
+    if [ -x "$candidate" ]; then real="$candidate"; break; fi
+  done
+fi
+if [ -z "$real" ]; then printf 'Alacritty executable not found; install Alacritty before using this terminal wrapper.\n' >&2; exit 127; fi
+case "${1:-}" in msg|migrate|--version|-V|--help|-h) exec "$real" "$@" ;; esac
+for arg in "$@"; do case "$arg" in -e|--command) exec "$real" "$@" ;; esac; done
+tmux_bin="$(command -v tmux 2>/dev/null || true)"
+if [ -z "$tmux_bin" ]; then printf 'tmux is required for ordinary Alacritty launches; install tmux or pass -e/--command.\n' >&2; exit 127; fi
+exec "$real" "$@" -e "$tmux_bin" new-session -A -s main

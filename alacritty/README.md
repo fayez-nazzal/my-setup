@@ -19,9 +19,10 @@ Requires:
 - `/bin/zsh` (hardcoded as `terminal.shell.program`) — adjust if zsh
   lives elsewhere on your system (`command -v zsh`), or if you haven't
   switched to zsh yet (see [`../zsh`](../zsh)).
-- The **GeistMono Nerd Font** — the bootstrap installs it when missing; see
-  [`../install.sh`](../install.sh). It is not required for Alacritty to start,
-  only to render the configured font correctly.
+- The **GeistMono Nerd Font Mono** family — select `Geist Mono Nerd Font` in
+  the interactive installer to install its Regular, Bold, and Italic faces.
+  It is not required for Alacritty to start, only to render the configured
+  family correctly.
 - The `Insert`-key bindings assume [`keyd`](../keyd/README.md)'s
   `[command:C]` layer is installed and emitting `Ctrl+Insert`/`Shift+Insert`
   for Cmd+C/Cmd+V — without keyd, those bindings are simply unreachable
