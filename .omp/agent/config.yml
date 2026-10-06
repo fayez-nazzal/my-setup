@@ -26,40 +26,27 @@ hideThinkingBlock: true
 steeringMode: all
 followUpMode: all
 modelRoles:
-  writer: openai-codex/gpt-6.1-sol:high
+  writer: openai-codex/gpt-6.1-sol:auto
   web: web/perplexity
-  default: anthropic/claude-opus-5-5:high
-  tiny: camel-stream/auto:medium
-  commit: openai-codex/gpt-6-luna:high
-  task: openai-codex/gpt-6-luna:medium
+  default: anthropic/claude-sonnet-5-5
+  tiny: openai-codex/gpt-6-luna:auto
+  commit: openai-codex/gpt-6-luna:auto
+  task: openai-codex/gpt-6-luna:auto
   plan: anthropic/claude-opus-5-5:max
-  vision: anthropic-api/claude-sonnet-5:medium
-  advisor: openai-codex/gpt-6-sol:medium
+  vision: openai-codex/gpt-6-luna:auto
+  advisor: openai-codex/gpt-6.1-sol:auto
   image: openai-codex/gpt-image-1:auto
-  speech: local/kokoro:auto
-  judge: anthropic-api/claude-opus-5-5:high
-  slow: openai-codex/gpt-6.1-sol:medium
-  memory: anthropic/claude-opus-5-5
-  smol: openai-codex/gpt-6-luna
+  speech: local/kokoro
+  memory: anthropic/claude-opus-5-5:off
+  smol: openai-codex/gpt-6-luna:auto
+  slow: anthropic/claude-opus-5-5:medium
+  judge: openai-codex/gpt-6.1-sol:auto
+  dictation: local/parakeet-tdt-0.6b-v3
 retry:
   fallbackChains:
-    slow:
-      - openai-codex/gpt-6.1-sol
-    smol:
-      - openai-codex/gpt-6-luna
-    tiny:
-      - openai-api/gpt-6-luna
-    commit:
-      - openai-api/gpt-6-luna
-    task:
-      - openai-api/gpt-6-luna
     plan:
       - openai-codex/gpt-6.1-sol
-    advisor:
-      - openai-api/gpt-6-sol
-    default:
-      - openai-codex/gpt-6.1-sol
-    judge:
+    memory:
       - openai-codex/gpt-6.1-sol
 dev:
   autoqaConsent: denied
@@ -68,3 +55,15 @@ cycleOrder:
   - default
   - slow
   - tiny
+github:
+  enabled: true
+speechgen:
+  enabled: true
+astGrep:
+  enabled: true
+security:
+  enabled: true
+checkpoint:
+  enabled: true
+computer:
+  enabled: false
