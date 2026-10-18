@@ -26,20 +26,20 @@ hideThinkingBlock: true
 steeringMode: all
 followUpMode: all
 modelRoles:
-  writer: openai-codex/gpt-6.1-sol:auto
+  writer: openrouter/google/gemini-4-argon:high
   web: web/perplexity
-  default: anthropic/claude-sonnet-5-5
+  default: openrouter/deepseek/deepseek-v4.1-flash-1017
   tiny: openai-codex/gpt-6-luna:auto
   commit: openai-codex/gpt-6-luna:auto
   task: openai-codex/gpt-6-luna:auto
-  plan: anthropic/claude-opus-5-5:max
+  plan: anthropic/claude-opus-5-5:high
   vision: openai-codex/gpt-6-luna:auto
   advisor: openai-codex/gpt-6.1-sol:auto
   image: openai-codex/gpt-image-1:auto
   speech: local/kokoro
   memory: anthropic/claude-opus-5-5:off
   smol: openai-codex/gpt-6-luna:auto
-  slow: anthropic/claude-opus-5-5:medium
+  slow: openai-codex/gpt-6.1-sol:medium
   judge: openai-codex/gpt-6.1-sol:auto
   dictation: local/parakeet-tdt-0.6b-v3
 retry:
@@ -48,6 +48,12 @@ retry:
       - openai-codex/gpt-6.1-sol
     memory:
       - openai-codex/gpt-6.1-sol
+    default:
+      - openai-codex/gpt-6-luna
+    smol:
+      - anthropic/claude-haiku-5-5
+    task:
+      - anthropic/claude-haiku-5-5
 dev:
   autoqaConsent: denied
 cycleOrder:
@@ -67,3 +73,7 @@ checkpoint:
   enabled: true
 computer:
   enabled: false
+codexResets:
+  autoRedeem: "no"
+claudeResets:
+  autoRedeem: "no"

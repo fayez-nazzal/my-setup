@@ -1,0 +1,13 @@
+{
+  "name": "better-cli",
+  "version": "1.0.0",
+  "description": "Best practices for building and improving CLIs that work for both humans and AI agents",
+  "entry": "SKILL.md",
+  "permissions": [],
+  "metadata": {
+    "emoji": ">_",
+    "category": "developer-tools",
+    "tags": ["cli", "command-line", "best-practices", "ai-agents"],
+    "homepage": "https://github.com/yogin16/better-cli"
+  }
+}

@@ -20,8 +20,8 @@ The installer does not change your login shell. On Linux run
 2. `.zprofile` runs in login shells and loads `profile.d/*.zsh`: Homebrew,
    PATH, Corretto 21 `JAVA_HOME`, and OrbStack when present.
 3. `.zshrc` runs in interactive shells and loads `rc.d/*.zsh` in name order:
-   GPG terminal setup, prompt, tool setup, history, key bindings, aliases,
-   completion, and zoxide.
+   GPG terminal setup, prompt, tool setup, 1Password CLI sign-in, history, key
+   bindings, aliases, completion, and zoxide.
 
 Each file is loaded once, so sourcing again is safe.
 

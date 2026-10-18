@@ -28,7 +28,7 @@ checks for its current revision. Prepare it for human merge review; do not merge
   template, relevant code and callers, and matching skills before editing.
   Repository rules and ownership boundaries govern; this skill grants no bypass.
 - Require Git, an authenticated `gh` CLI for the verified host, and the writer
-  skills `orchestrate-pr-writer` and `orchestrate-writer`. Use existing credential
+  skills `orchestrate-pr-writer` and `rewrite`. Use existing credential
   providers; never print tokens or request broader scopes as a convenience.
 - Check the repository's `.omp/skills/create-and-monitor-pr/SKILL.md`.
   If it is a different optimized copy, read it and its repository profile before
@@ -121,7 +121,7 @@ A draft cannot be treated as bot-reviewed when bot configuration excludes drafts
 Use `orchestrate-pr-writer` for the description with the exact current template,
 verified change summary, check results, risks, assumptions, and open questions.
 Use the local variant when provided; do not hardcode a model or writing service.
-Use `orchestrate-writer` for all other original user-facing prose, including PR
+Use `rewrite` for all other original user-facing prose, including PR
 and commit titles, review replies, progress reports, and the final handoff. Batch
 related prose into one bounded verified packet when useful; preserve identifiers
 and command output verbatim. Treat drafts as proposals, validate their facts and
@@ -157,7 +157,7 @@ Record one disposition:
 | Incorrect or already addressed | Cite current code/test evidence; make no unnecessary change. |
 | Unclear, out of scope, or conflicting with ownership/security | Leave open and report the question or required owner decision. |
 
-For an incorrect comment, use `orchestrate-writer` to draft one simple sentence
+For an incorrect comment, use `rewrite` to draft one simple sentence
 of at most 20 words, aiming for 10 or fewer when sufficient. Explain why no change
 is needed without jargon or unsupported claims. Count words deterministically
 and verify the justification against evidence. Reply to the actual thread via
@@ -195,7 +195,7 @@ verified path/policy evidence. Missing checks or unknown mergeability are blocke
 Distinguish `ready for human merge review`, `waiting`, and `blocked`. If human
 approval is outstanding, never claim fully merge-ready. No automatic merge,
 auto-merge enablement, admin bypass, fabricated approval, or dismissal of reviews.
-Through `orchestrate-writer`, report the PR link, final branch/base/head SHAs,
+Through `rewrite`, report the PR link, final branch/base/head SHAs,
 exact check commands/results, bot dispositions, remaining approvals, skipped
 checks/limits, and next action. Include only concise sanitized evidence. This
 skill is an agent workflow, not an unattended monitor or a guarantee of safety.

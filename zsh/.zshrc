@@ -1,5 +1,2 @@
 source "$HOME/.config/zsh/lib/load.zsh"
-export JAVA_HOME="$HOME/.local/opt/corretto-21"
-export PATH="$HOME/.local/bin:$JAVA_HOME/bin:$PATH"
-export PATH="/home/fayez/.local/bin:$PATH"
 zrc_load_dir "$HOME/.config/zsh/rc.d"

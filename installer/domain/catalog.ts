@@ -61,7 +61,7 @@ export const configurationLinks: Partial<Record<ComponentId, readonly [string, s
   "zsh-config": [["zsh/.zshenv", ".zshenv"], ["zsh/.zprofile", ".zprofile"], ["zsh/.zshrc", ".zshrc"], ["zsh/.config/zsh", ".config/zsh"]],
   "git-config": [["git/.gitconfig", ".gitconfig"]],
   "tmux-config": [[".tmux.conf", ".tmux.conf"]],
-  "omp-config": [[".omp/agent/config.yml", ".omp/agent/config.yml"], [".omp/agent/models.yml", ".omp/agent/models.yml"], [".omp/agent/extensions", ".omp/agent/extensions"], [".omp/agent/skills", ".omp/agent/skills"], [".omp/agent/agents/writer.md", ".omp/agent/agents/writer.md"], ["bin/omp-hide-aws-skills", ".local/bin/omp-hide-aws-skills"]],
+  "omp-config": [[".omp/agent/config.yml", ".omp/agent/config.yml"], [".omp/agent/models.yml", ".omp/agent/models.yml"], [".omp/agent/mcp.json", ".omp/agent/mcp.json"], [".omp/agent/extensions", ".omp/agent/extensions"], [".omp/agent/skills", ".omp/agent/skills"], [".omp/agent/agents/writer.md", ".omp/agent/agents/writer.md"], ["bin/omp-hide-aws-skills", ".local/bin/omp-hide-aws-skills"]],
   "tmuxscope-config": [["tmux/tmux-scopes.conf", ".config/tmux-scopes.conf"]],
   "alacritty-config": [["alacritty/alacritty.toml", ".config/alacritty/alacritty.toml"], ["bin/my-setup-alacritty-shell", ".local/bin/my-setup-alacritty-shell"]],
   styleguard: [["bin/styleguard/cli.ts", ".local/bin/styleguard"]],

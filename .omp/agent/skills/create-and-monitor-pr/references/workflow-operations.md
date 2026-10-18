@@ -127,7 +127,7 @@ resolve. Do not assume `isOutdated` means the concern disappeared.
 ## Reply and resolve one verified bot thread
 
 Use the root review comment's REST `databaseId` for replies, not the GraphQL
-thread ID or an arbitrary child comment. Have `orchestrate-writer` draft the
+thread ID or an arbitrary child comment. Have `rewrite` draft the
 plain one-sentence justification, validate its facts and 20-word maximum, and
 write it to a local file outside the commit scope.
 

@@ -1,0 +1,15 @@
+{
+  "name": "yogin16",
+  "owner": {
+    "name": "yogin"
+  },
+  "plugins": [
+    {
+      "name": "better-cli",
+      "source": {
+        "type": "github",
+        "repo": "yogin16/better-cli"
+      }
+    }
+  ]
+}

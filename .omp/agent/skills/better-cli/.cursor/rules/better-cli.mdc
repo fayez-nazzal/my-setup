@@ -1,0 +1,34 @@
+---
+description: Best practices for building and improving CLIs for humans and AI agents. Apply when creating, modifying, or reviewing CLI code.
+alwaysApply: false
+globs: ["**/cli/**", "**/cmd/**", "**/commands/**", "**/bin/**", "**/*cli*"]
+---
+
+# Better CLI Rules
+
+When building or improving CLI tools:
+
+## Output
+- stdout = data only. stderr = errors, warnings, progress, prompts
+- Support `--json` with envelope: `{"status": "ok|error", "data": {...}}`
+- Output must guide the next action — suggest follow-up commands on success and fix commands on failure
+- No ANSI codes when piped; respect `NO_COLOR` env var
+
+## Errors
+- Semantic exit codes: 0=success, 2=usage, 3=not-found, 4=permission, 75=transient
+- Every error: what + context + fix command + docs link
+- JSON errors: `{"code": "AUTH_EXPIRED", "message": "...", "fix": "...", "transient": false}`
+
+## Interaction
+- Every prompt needs a flag bypass (`--yes`, `--force`, `--name=value`)
+- Never hang when stdin is not a TTY
+- Progress to stderr only
+
+## Design
+- Flags over positional args
+- Config precedence: flags > env vars > project config > user config > defaults
+- Never accept secrets via flags
+- Support `--fields`, `--quiet`, `--dry-run`
+- Create commands output the resource identifier
+
+Full guide: see SKILL.md in project root.
