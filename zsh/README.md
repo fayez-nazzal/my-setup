@@ -20,10 +20,15 @@ The installer does not change your login shell. On Linux run
 2. `.zprofile` runs in login shells and loads `profile.d/*.zsh`: Homebrew,
    PATH, Corretto 21 `JAVA_HOME`, and OrbStack when present.
 3. `.zshrc` runs in interactive shells and loads `rc.d/*.zsh` in name order:
-   GPG terminal setup, prompt, tool setup, 1Password CLI sign-in, history, key
-   bindings, aliases, completion, and zoxide.
+   GPG terminal setup, prompt, tool setup, history, key bindings, aliases,
+   completion, and zoxide.
 
 Each file is loaded once, so sourcing again is safe.
+
+1Password CLI sign-in is deferred until `omp` is invoked, before its credential
+lookup and launch. Valid sessions are reused; missing or expired sessions prompt
+only in an interactive shell with terminal input. Opening a shell does not run
+`op signin`.
 
 The optional `java-home` installer choice requires Amazon Corretto 21 and
 `zsh-config`. Its `profile.d/30-java-home.zsh` finds a Corretto 21 JDK by its

@@ -28,7 +28,7 @@ followUpMode: all
 modelRoles:
   writer: openrouter/google/gemini-4-argon:high
   web: web/perplexity
-  default: openrouter/deepseek/deepseek-v4.1-flash-1017
+  default: anthropic/claude-sonnet-5-5
   tiny: openai-codex/gpt-6-luna:auto
   commit: openai-codex/gpt-6-luna:auto
   task: openai-codex/gpt-6-luna:auto

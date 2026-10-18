@@ -28,6 +28,12 @@ ffc() {
 # Perplexity's web-search key stays in 1Password and is loaded only when
 # the omp command is invoked; failed lookups leave OMP's normal fallbacks
 omp() {
+  # Reuse a valid session; prompt only when omp is invoked from a terminal.
+  if command -v op >/dev/null 2>&1 \
+    && [[ -o interactive && -t 0 ]] \
+    && ! op whoami >/dev/null 2>&1; then
+    eval "$(op signin)"
+  fi
   if [[ -z "${PERPLEXITY_API_KEY:-}" ]] && command -v op >/dev/null 2>&1; then
     local perplexity_key
     perplexity_key="$(op read "op://Personal/Perplexity Web Search/password" --no-newline 2>/dev/null)" || perplexity_key=""
