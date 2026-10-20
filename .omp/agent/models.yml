@@ -152,3 +152,34 @@ providers:
         name: "Claude Sonnet 5 (MWAPI)"
         input:
           - text
+  openrouter:
+    apiKey: "!op read \"op://Personal/OpenRouter API Key - omp/credential\" --no-newline"
+    api: openai-completions
+    baseUrl: https://openrouter.ai/api/v1
+    models:
+      - id: google/gemini-4-argon
+        name: "Google: Gemini 4 Argon"
+        reasoning: true
+        input:
+          - text
+          - image
+        contextWindow: 1048576
+        maxTokens: 65536
+        cost:
+          input: 2
+          output: 10
+          cacheRead: 0.1
+          cacheWrite: 0.1875
+      - id: deepseek/deepseek-v4.1-flash-1017
+        name: "DeepSeek: DeepSeek V4.1 Flash 1017"
+        reasoning: true
+        input:
+          - text
+          - image
+        contextWindow: 1048576
+        maxTokens: 393216
+        cost:
+          input: 0.15
+          output: 0.6
+          cacheRead: 0.003
+          cacheWrite: 0

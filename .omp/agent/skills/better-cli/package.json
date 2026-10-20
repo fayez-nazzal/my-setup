@@ -1,0 +1,30 @@
+{
+  "name": "better-cli",
+  "version": "1.0.0",
+  "description": "Agent skill: Best practices for building CLIs that work for both humans and AI agents",
+  "author": "yogin",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yogin16/better-cli"
+  },
+  "homepage": "https://github.com/yogin16/better-cli",
+  "keywords": [
+    "agent-skill",
+    "cli",
+    "command-line",
+    "best-practices",
+    "ai-agents",
+    "developer-experience",
+    "claude-code",
+    "copilot",
+    "cursor",
+    "codex"
+  ],
+  "files": [
+    "SKILL.md",
+    "references/",
+    "README.md",
+    "LICENSE"
+  ]
+}

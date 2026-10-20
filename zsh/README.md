@@ -25,6 +25,11 @@ The installer does not change your login shell. On Linux run
 
 Each file is loaded once, so sourcing again is safe.
 
+1Password CLI sign-in is deferred until `omp` is invoked, before its credential
+lookup and launch. Valid sessions are reused; missing or expired sessions prompt
+only in an interactive shell with terminal input. Opening a shell does not run
+`op signin`.
+
 The optional `java-home` installer choice requires Amazon Corretto 21 and
 `zsh-config`. Its `profile.d/30-java-home.zsh` finds a Corretto 21 JDK by its
 release metadata, sets `JAVA_HOME`, and prepends its `bin` directory to PATH

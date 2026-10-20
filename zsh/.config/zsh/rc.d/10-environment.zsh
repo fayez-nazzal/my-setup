@@ -18,7 +18,7 @@ esac
 # and by some bun-aware tools, in addition to the PATH entry below.
 [[ -d "$HOME/.bun" ]] && export BUN_INSTALL="$HOME/.bun"
 
-for tool_home in "$HOME/.bun/bin" "$HOME/.opencode/bin" "$HOME/.grok/bin" "$HOME/.jbang/bin"; do
+for tool_home in "$HOME/.bun/bin" "$HOME/.cargo/bin" "$HOME/.opencode/bin" "$HOME/.grok/bin" "$HOME/.jbang/bin"; do
   [[ -d $tool_home ]] && export PATH="$tool_home:$PATH"
 done
 

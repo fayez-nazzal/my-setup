@@ -26,12 +26,12 @@ hideThinkingBlock: true
 steeringMode: all
 followUpMode: all
 modelRoles:
-  writer: anthropic/claude-opus-5-5:auto
+  writer: openrouter/google/gemini-4-argon:high
   web: web/perplexity
   tiny: openai-codex/gpt-6-luna:auto
   commit: anthropic/claude-haiku-5-5:auto
   task: anthropic/claude-haiku-5-5:auto
-  plan: anthropic/claude-opus-5-5:max
+  plan: anthropic/claude-opus-5-5:high
   vision: openai-codex/gpt-6-luna:auto
   advisor: openai-codex/gpt-6.1-sol:auto
   image: openai-codex/gpt-image-1:auto
@@ -62,6 +62,8 @@ retry:
       - openai-codex/gpt-6-luna
     commit:
       - openai-codex/gpt-6-luna
+    default:
+      - openai-codex/gpt-6-luna
 dev:
   autoqaConsent: denied
 cycleOrder:
@@ -82,4 +84,6 @@ checkpoint:
 computer:
   enabled: false
 codexResets:
+  autoRedeem: "no"
+claudeResets:
   autoRedeem: "no"

@@ -56,6 +56,12 @@ Account dialogs happen before long builds.
 - **OMP and writing:** Only selected configuration, extensions, skills, and
   the writer definition are linked—not the whole agent folder with sessions
   and history. The role-backed writer handles bounded writing without tools.
+  OpenRouter models are selectable with
+  `omp --model openrouter/google/gemini-4-argon` or
+  `omp --model openrouter/deepseek/deepseek-v4.1-flash-1017`; their API key is
+  read at runtime from `op://Personal/OpenRouter API Key - omp/credential`
+  (requires signed-in 1Password CLI). Existing model-role assignments are
+  unchanged. `~/.omp/agent/models.yml` links to `.omp/agent/models.yml` here.
 
 ## Details
 
