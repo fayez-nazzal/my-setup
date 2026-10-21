@@ -28,20 +28,23 @@ followUpMode: all
 modelRoles:
   writer: openrouter/google/gemini-4-argon:high
   web: web/perplexity
-  tiny: openai-codex/gpt-6-luna:auto
+  default: anthropic/claude-sonnet-5-5
+  tiny: anthropic/claude-haiku-5-5:auto
   commit: anthropic/claude-haiku-5-5:auto
-  task: anthropic/claude-haiku-5-5:auto
+  task: anthropic/claude-sonnet-5-5:auto
   plan: anthropic/claude-opus-5-5:high
   vision: openai-codex/gpt-6-luna:auto
   advisor: openai-codex/gpt-6.1-sol:auto
   image: openai-codex/gpt-image-1:auto
   speech: local/kokoro
-  memory: anthropic/claude-opus-5-5:off
+  slow: openai-codex/gpt-6.1-sol:medium
+  judge: openai-codex/gpt-6.1-sol:auto
+  memory: anthropic/claude-sonnet-5-5:auto
   smol: anthropic/claude-haiku-5-5:auto
-  slow: openai-codex/gpt-6.1-sol:auto
-  judge: anthropic/claude-opus-5-5:auto
   dictation: local/parakeet-tdt-0.6b-v3
-  default: anthropic/claude-sonnet-5-5
+  review: anthropic/claude-opus-5-5:auto
+  SECONDARY: openai-codex/gpt-6.1-sol:auto
+  EXTREME: openai-codex/gpt-6-astra:max
 retry:
   fallbackChains:
     plan:
@@ -64,6 +67,24 @@ retry:
       - openai-codex/gpt-6-luna
     default:
       - openai-codex/gpt-6-luna
+    smol:
+      - openai-codex/gpt-6-luna
+    task:
+      - openai-codex/gpt-6.1-sol
+    vision:
+      - anthropic/claude-haiku-5-5
+    tiny:
+      - openai-codex/gpt-6-luna
+    commit:
+      - openai-codex/gpt-6-luna
+    advisor:
+      - anthropic/claude-sonnet-5-5
+    slow:
+      - openai-codex/gpt-6.1-sol
+    writer:
+      - anthropic/claude-opus-5-5
+    review:
+      - openai-codex/gpt-6.1-sol
 dev:
   autoqaConsent: denied
 cycleOrder:
@@ -71,6 +92,9 @@ cycleOrder:
   - default
   - slow
   - tiny
+  - review
+  - SECONDARY
+  - EXTREME
 github:
   enabled: true
 speechgen:

@@ -5,6 +5,10 @@
       "command": "/Applications/Pen.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
       "args": ["--app", "desktop"],
       "env": {}
+    },
+    "clipbolt": {
+      "type": "http",
+      "url": "http://localhost:3002/api/mcp"
     }
   }
 }
