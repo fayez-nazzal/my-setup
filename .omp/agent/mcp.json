@@ -5,6 +5,13 @@
       "command": "/Applications/Pen.app/Contents/Resources/app.asar.unpacked/out/mcp-server-darwin-arm64",
       "args": ["--app", "desktop"],
       "env": {}
+    },
+    "excalidraw": {
+      "type": "http",
+      "url": "https://api.excalidraw.com/api/v1/mcp",
+      "headers": {
+        "Authorization": "!key=$(op read \"op://Personal/OMP EXCALIDRAW/password\" --no-newline) && printf 'Bearer %s' \"$key\""
+      }
     }
   }
 }
