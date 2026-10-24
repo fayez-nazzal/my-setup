@@ -9,6 +9,13 @@
     "clipbolt": {
       "type": "http",
       "url": "http://localhost:3002/api/mcp"
+    },
+    "excalidraw": {
+      "type": "http",
+      "url": "https://api.excalidraw.com/api/v1/mcp",
+      "headers": {
+        "Authorization": "!key=$(op read \"op://Personal/OMP EXCALIDRAW/password\" --no-newline) && printf 'Bearer %s' \"$key\""
+      }
     }
   }
 }

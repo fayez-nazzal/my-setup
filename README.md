@@ -62,6 +62,16 @@ Account dialogs happen before long builds.
   read at runtime from `op://Personal/OpenRouter API Key - omp/credential`
   (requires signed-in 1Password CLI). Existing model-role assignments are
   unchanged. `~/.omp/agent/models.yml` links to `.omp/agent/models.yml` here.
+- **Excalidraw+ MCP:** OMP uses `.omp/agent/mcp.json`, linked on this machine
+  to `~/.omp/agent/mcp.json`. Claude Code has a user-scoped `excalidraw`
+  server in `~/.claude.json`. Both connect to
+  `https://api.excalidraw.com/api/v1/mcp` and read
+  `op://Personal/OMP EXCALIDRAW/password` at runtime (signed-in `op` required).
+  OMP uses a `!command` Authorization header; Claude uses `headersHelper`
+  with `op` and `jq`. Neither configuration stores the key. On a fresh
+  machine, link the MCP file and register Claude's server separately;
+  the installer does not configure Claude Code. Restart clients after changes.
+  Verify Claude with `claude mcp get excalidraw`.
 
 ## Details
 
