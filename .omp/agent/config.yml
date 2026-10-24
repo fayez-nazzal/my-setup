@@ -28,7 +28,7 @@ followUpMode: all
 modelRoles:
   writer: openrouter/google/gemini-4-argon:high
   web: web/perplexity
-  default: anthropic/claude-sonnet-5-5
+  default: kimi-code/k3.1-pro:low
   tiny: minimax-code/MiniMax-M3.1-Flash:auto
   commit: minimax-code/MiniMax-M3.1-Flash:auto
   task: anthropic/claude-haiku-5-5:auto
@@ -89,6 +89,7 @@ retry:
     EXTREME:
       - anthropic/claude-opus-5-5
       - openai-codex/gpt-6-astra
+  waitForUsageReset: true
 dev:
   autoqaConsent: denied
 cycleOrder:
