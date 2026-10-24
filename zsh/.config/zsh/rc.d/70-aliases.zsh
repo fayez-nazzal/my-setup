@@ -1,4 +1,5 @@
 alias gl='git log --graph --oneline'
+alias glo="git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset'"
 alias gco='git checkout'
 
 # Reuse the dedicated editor window when running nvim without arguments in tmux.
