@@ -29,62 +29,66 @@ modelRoles:
   writer: openrouter/google/gemini-4-argon:high
   web: web/perplexity
   default: anthropic/claude-sonnet-5-5
-  tiny: anthropic/claude-haiku-5-5:auto
-  commit: anthropic/claude-haiku-5-5:auto
-  task: anthropic/claude-sonnet-5-5:auto
+  tiny: minimax-code/MiniMax-M3.1-Flash:auto
+  commit: minimax-code/MiniMax-M3.1-Flash:auto
+  task: anthropic/claude-haiku-5-5:auto
   plan: anthropic/claude-opus-5-5:high
   vision: openai-codex/gpt-6-luna:auto
   advisor: openai-codex/gpt-6.1-sol:auto
   image: openai-codex/gpt-image-1:auto
   speech: local/kokoro
-  slow: openai-codex/gpt-6.1-sol:medium
+  slow: anthropic/claude-opus-5-5:auto
   judge: openai-codex/gpt-6.1-sol:auto
-  memory: anthropic/claude-sonnet-5-5:auto
+  memory: openai-codex/gpt-6.1-sol:auto
   smol: anthropic/claude-haiku-5-5:auto
   dictation: local/parakeet-tdt-0.6b-v3
-  review: anthropic/claude-opus-5-5:auto
+  review: openai-codex/gpt-6.1-sol:auto
   SECONDARY: openai-codex/gpt-6.1-sol:auto
   EXTREME: openai-codex/gpt-6-astra:max
 retry:
   fallbackChains:
     plan:
       - openai-codex/gpt-6.1-sol
+      - anthropic/claude-sonnet-5-5
     memory:
-      - openai-codex/gpt-6.1-sol
+      - anthropic/claude-sonnet-5-5
+      - openai-codex/gpt-6-luna
     task:
       - openai-codex/gpt-6-luna
     slow:
+      - anthropic/claude-sonnet-5-5
       - openai-codex/gpt-6.1-sol
     writer:
+      - anthropic/claude-opus-5-5
       - openai-codex/gpt-6.1-sol
     smol:
       - openai-codex/gpt-6-luna
+      - anthropic/claude-haiku-5-5
     judge:
       - openai-codex/gpt-6.1-sol
     tiny:
       - openai-codex/gpt-6-luna
+      - anthropic/claude-haiku-5-5
     commit:
       - openai-codex/gpt-6-luna
-    default:
-      - openai-codex/gpt-6-luna
-    smol:
-      - openai-codex/gpt-6-luna
-    task:
-      - openai-codex/gpt-6.1-sol
+      - anthropic/claude-haiku-5-5
     vision:
       - anthropic/claude-haiku-5-5
-    tiny:
-      - openai-codex/gpt-6-luna
-    commit:
       - openai-codex/gpt-6-luna
     advisor:
       - anthropic/claude-sonnet-5-5
-    slow:
-      - openai-codex/gpt-6.1-sol
-    writer:
-      - anthropic/claude-opus-5-5
     review:
+      - anthropic/claude-haiku-5-5
       - openai-codex/gpt-6.1-sol
+    default:
+      - openai-codex/gpt-6.1-sol
+      - anthropic/claude-sonnet-5-5
+    SECONDARY:
+      - anthropic/claude-opus-5-5
+      - openai-codex/gpt-6.1-sol
+    EXTREME:
+      - anthropic/claude-opus-5-5
+      - openai-codex/gpt-6-astra
 dev:
   autoqaConsent: denied
 cycleOrder:
