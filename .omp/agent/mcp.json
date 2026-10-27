@@ -14,7 +14,7 @@
       "type": "http",
       "url": "https://api.excalidraw.com/api/v1/mcp",
       "headers": {
-        "Authorization": "!key=$(op read \"op://Personal/OMP EXCALIDRAW/password\" --no-newline) && printf 'Bearer %s' \"$key\""
+        "Authorization": "!key=$(op read \"op://OMP/OMP EXCALIDRAW/password\" --no-newline) && printf 'Bearer %s' \"$key\""
       }
     }
   }

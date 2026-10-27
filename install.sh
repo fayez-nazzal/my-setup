@@ -10,6 +10,40 @@ case "$arch" in x86_64|arm64|aarch64) ;; *) printf 'Unsupported CPU architecture
 if [ "$(id -u)" -eq 0 ]; then printf 'Do not run the installer as root.\n' >&2; exit 1; fi
 if [ ! -t 0 ] || [ ! -t 1 ]; then printf 'Interactive installer requires a terminal on stdin and stdout.\n' >&2; exit 1; fi
 prepend_existing() { for candidate in "$HOME/.local/bin" "$HOME/.bun/bin" "$HOME/.cargo/bin" /opt/homebrew/bin /usr/local/bin /home/linuxbrew/.linuxbrew/bin; do [ ! -d "$candidate" ] || PATH="$candidate:$PATH"; done; }
+# SHA-256 gate for downloaded installers and archives; fails when neither shasum nor sha256sum is available.
+sha256_matches() {
+  local actual=""
+  if command -v shasum >/dev/null 2>&1; then actual="$(shasum -a 256 "$1" | cut -d' ' -f1)"
+  elif command -v sha256sum >/dev/null 2>&1; then actual="$(sha256sum "$1" | cut -d' ' -f1)"; fi
+  [ -n "$actual" ] && [ "$actual" = "$2" ]
+}
+# Exact Bun release assets (bun-v1.4.4) for this OS and CPU, printed as "<asset> <sha256>".
+bun_pinned_asset() {
+  case "$1/$2" in
+    Darwin/arm64) printf '%s %s\n' bun-darwin-aarch64.zip c240d7f0ccb90c263a849fcdb09b7ee62630d921348ed6aafda86b9d577bc510 ;;
+    Darwin/x86_64) printf '%s %s\n' bun-darwin-x64-baseline.zip d4a155adfbfd09155eb3ba05c9e3a544f39297d7a68616d3c7759f67ab5c47dc ;;
+    Linux/aarch64|Linux/arm64) printf '%s %s\n' bun-linux-aarch64.zip baa6bb36f51d6e58561e02bbea825038a9df454f673d6d776e8bbf86f8c7850e ;;
+    Linux/x86_64) printf '%s %s\n' bun-linux-x64-baseline.zip e0446eb55995772eb9894bebae9a6be368d985a8b9271ee124486f9946eedd76 ;;
+    *) return 1 ;;
+  esac
+}
+# Downloads the pinned Bun zip, checks its SHA-256 before unzipping, probes the binary, then publishes it to ~/.bun/bin.
+install_pinned_bun() {
+  local pinned asset digest stage backup
+  pinned="$(bun_pinned_asset "$os" "$arch")" || { printf 'No pinned Bun release for %s %s; install Bun >=1.3.0 manually.\n' "$os" "$arch" >&2; return 1; }
+  asset="${pinned% *}"; digest="${pinned#* }"; stage="$(mktemp -d)"
+  if ! curl -fL --retry 2 "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/$asset" -o "$stage/$asset"; then printf 'Bun download failed.\n' >&2; rm -rf "$stage"; return 1; fi
+  if ! sha256_matches "$stage/$asset" "$digest"; then printf 'Bun download failed its SHA-256 check; nothing was installed.\n' >&2; rm -rf "$stage"; return 1; fi
+  if ! { unzip -q "$stage/$asset" -d "$stage" && "$stage/${asset%.zip}/bun" --version >/dev/null 2>&1; }; then printf 'Pinned Bun archive did not contain a working bun.\n' >&2; rm -rf "$stage"; return 1; fi
+  mkdir -p "$HOME/.bun/bin"
+  if [ -e "$HOME/.bun/bin/bun" ]; then backup="$(mktemp -d "$HOME/.dotfiles-backup-bun-XXXXXX")" && mv "$HOME/.bun/bin/bun" "$backup/bun" || { rm -rf "$stage"; printf 'Could not back up the existing ~/.bun/bin/bun; nothing was installed.\n' >&2; return 1; }; fi
+  if ! install -m 755 "$stage/${asset%.zip}/bun" "$HOME/.bun/bin/bun"; then
+    rm -f "$HOME/.bun/bin/bun"; [ -z "${backup:-}" ] || mv "$backup/bun" "$HOME/.bun/bin/bun"
+    rm -rf "$stage"; printf 'Bun installation failed.\n' >&2; return 1
+  fi
+  rm -rf "$stage"
+  [ -z "${backup:-}" ] || printf 'Replaced an existing ~/.bun/bin/bun; it is kept in %s.\n' "$backup"
+}
 # Files left behind by an earlier `sudo` run (for example a root-owned ~/.bun cache) make later
 # user-level installs fail with EACCES. Hand them back to the user before anything else runs.
 repair_ownership() {
@@ -38,10 +72,10 @@ if [ "$DRY_RUN" != --dry-run ] && [ "$os" = Darwin ] && ! command -v brew >/dev/
     if ! command -v curl >/dev/null 2>&1; then printf 'Homebrew bootstrap requires curl; Homebrew-dependent choices will remain unavailable.\n' >&2
     else
       tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
-      if curl -fL --retry 2 https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$tmp"; then
+      if curl -fL --retry 2 https://raw.githubusercontent.com/Homebrew/install/85d1a3fc80d8a63932f632aca8f787de11d14a64/install.sh -o "$tmp" && sha256_matches "$tmp" 5f333bbe53bc490e51e7ccb1df8779b3dd6ee73a1a7379efda216edb08ccb148; then
         if /bin/bash "$tmp"; then prepend_existing; export PATH
         else printf 'Homebrew installation failed; continuing with non-Homebrew routes.\n' >&2; fi
-      else printf 'Homebrew download failed; continuing with non-Homebrew routes.\n' >&2; fi
+      else printf 'Homebrew installer download failed or did not match its pinned SHA-256; continuing with non-Homebrew routes.\n' >&2; fi
       rm -f "$tmp"; trap - EXIT
     fi
   fi
@@ -62,11 +96,9 @@ if [ "$bun_ok" != true ]; then
     if [ -n "$bun_path" ] && brew list --formula --versions bun >/dev/null 2>&1; then brew upgrade oven-sh/bun/bun || { printf 'Consented Bun upgrade failed.\n' >&2; exit 1; }
     else brew install oven-sh/bun/bun || { printf 'Bun installation failed.\n' >&2; exit 1; }; fi
   else
-    for prerequisite in curl bash unzip; do command -v "$prerequisite" >/dev/null 2>&1 || { printf 'Upstream Bun installer requires %s.\n' "$prerequisite" >&2; exit 1; }; done
-    tmp="$(mktemp)"; trap 'rm -f "$tmp"' EXIT
-    curl -fL --retry 2 https://bun.com/install -o "$tmp" || { printf 'Bun installer download failed.\n' >&2; exit 1; }
-    /bin/bash "$tmp" || { printf 'Bun installation failed.\n' >&2; exit 1; }
-    rm -f "$tmp"; trap - EXIT
+    for prerequisite in curl unzip; do command -v "$prerequisite" >/dev/null 2>&1 || { printf 'Pinned Bun installer requires %s.\n' "$prerequisite" >&2; exit 1; }; done
+    command -v shasum >/dev/null 2>&1 || command -v sha256sum >/dev/null 2>&1 || { printf 'Pinned Bun installer requires shasum or sha256sum.\n' >&2; exit 1; }
+    install_pinned_bun || exit 1
   fi
   prepend_existing; export PATH; bun_path="$(command -v bun || true)"; [ -n "$bun_path" ] || bun_path="$HOME/.bun/bin/bun"
   [ -x "$bun_path" ] || { printf 'Bun installation did not provide an executable.\n' >&2; exit 1; }

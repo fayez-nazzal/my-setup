@@ -66,7 +66,8 @@ export async function syncGithubTools(c: RecipeContext): Promise<ToolResult> {
   const attention = lines.filter(line => line.startsWith("attention: ")).map(line => line.slice("attention: ".length));
   if (result.code !== 0) {
     const failed = lines.flatMap(line => /^([\w.-]+): failed/.exec(line)?.[1] ?? []);
-    return ok("github-tools", "failed", ...attention, `GitHub tools failed: ${failed.join(", ") || "see output above"}; fix the cause, then run my-setup-tools.`);
+    const trust = lines.some(line => line.includes("trust material")) ? ["GitHub tool updates need enrolled owner keys in ~/.config/my-setup/tool-trust; see tools/README.md (Trusted commits)."] : [];
+    return ok("github-tools", "failed", ...attention, ...trust, `GitHub tools failed: ${failed.join(", ") || "see output above"}; fix the cause, then run my-setup-tools.`);
   }
   const summaries = lines.filter(line => /^[\w.-]+: /.test(line) && !line.startsWith("attention: ") && !line.endsWith(": building…"));
   const changed = linked === "changed" || summaries.some(line => !/^[\w.-]+: unchanged/.test(line));

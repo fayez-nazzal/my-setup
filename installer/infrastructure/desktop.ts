@@ -1,8 +1,8 @@
-import { lstat, readdir, readFile, readlink } from "node:fs/promises";
-import { mkdtemp, rm } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { lstat, mkdtemp, readdir, readFile, readlink, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { systemConfigurationLinks } from "../domain/catalog";
+import { basename, dirname, join, resolve } from "node:path";
+import { systemConfigurationFiles } from "../domain/catalog";
 import type { RecipeContext, ToolResult } from "./tools";
 
 function result(id: string, status: ToolResult["status"], ...attention: string[]): ToolResult {
@@ -12,75 +12,188 @@ function executable(c: RecipeContext, name: string): string | undefined {
   return c.host.executables.get(name);
 }
 
-export async function installKeyd(c: RecipeContext): Promise<ToolResult> {
+const keydPinnedTag = "v2.6.0";
+const keydPinnedCommit = "7c0aecb8bfd34dc8642bf4eefd2e59c89e61cec3";
+const keydRecordFile = ".my-setup-sha256";
+const keydBackupRoot = ".my-setup-backups";
+const keydRecordLine = /^([0-9a-f]{64})  ([A-Za-z0-9._-]+)$/;
+const keydApplePresent = /(?:Vendor=004c|Vendor=05ac).*?Product=029c|Product=029c.*?Vendor=(?:004c|05ac)/is;
+
+type KeydPaths = { directory: string; inputDevices: string; owner?: number };
+type Existing = { kind: "absent" } | { kind: "link"; points: boolean } | { kind: "other" } | { kind: "file"; digest: string; owned: boolean; safe: boolean };
+type Step = { name: string; target: string; prior: Existing; config: boolean } & ({ kind: "remove" } | { kind: "copy"; source: string } | { kind: "record"; content: string });
+type Applied = { step: Step; restoreFrom?: string };
+
+const digestOf = async (path: string) => createHash("sha256").update(await readFile(path)).digest("hex");
+const sudoOk = async (c: RecipeContext, args: string[]) => (await c.run("sudo", args)).code === 0;
+const serialize = (records: Map<string, string>) => [...records].sort(([a], [b]) => a.localeCompare(b)).map(([name, digest]) => `${digest}  ${name}\n`).join("");
+
+async function inspect(path: string, owner: number, source?: string): Promise<Existing> {
+  const stat = await lstat(path).catch(() => undefined);
+  if (!stat) return { kind: "absent" };
+  if (stat.isSymbolicLink()) return { kind: "link", points: source !== undefined && resolve(dirname(path), await readlink(path)) === source };
+  if (!stat.isFile()) return { kind: "other" };
+  return { kind: "file", digest: await digestOf(path), owned: stat.uid === owner, safe: stat.uid === owner && (stat.mode & 0o022) === 0 };
+}
+
+export async function installKeyd(c: RecipeContext, paths: KeydPaths = { directory: "/etc/keyd", inputDevices: "/proc/bus/input/devices" }): Promise<ToolResult> {
   if (c.host.platform !== "linux") return result("keyd", "blocked", "keyd is supported only on Linux.");
+  const owner = paths.owner ?? 0;
   const keyd = executable(c, "keyd") ?? executable(c, "keyd.rvaiya");
-  const devices = await readFile("/proc/bus/input/devices", "utf8").catch(() => undefined);
-  const hasAppleKeyboard = devices !== undefined && /(?:Vendor=004c|Vendor=05ac).*?Product=029c|Product=029c.*?Vendor=(?:004c|05ac)/is.test(devices);
-  const systemLinks = systemConfigurationLinks["keyd-config"] ?? [];
-  const appleMapping = systemLinks.find(([source]) => source.includes("apple"));
-  const appleConfig = appleMapping ? join(c.repoRoot, appleMapping[0]) : "";
-  const appleDestination = appleMapping?.[1] ?? "";
-  const links: Array<[string, string]> = systemLinks
-    .filter(([source]) => hasAppleKeyboard || !source.includes("apple"))
-    .map(([source, destination]) => [join(c.repoRoot, source), destination]);
-  const ensureSystemLink = async (source: string, destination: string): Promise<boolean | ToolResult> => {
-    const current = await lstat(destination).catch(() => undefined);
-    if (current?.isSymbolicLink()) {
-      const target = await readlink(destination);
-      if (resolve(dirname(destination), target) === source) return false;
-    }
-    if (current) return result("keyd", "blocked", `${destination} conflicts with the repository configuration; preserve it and replace manually: sudo cp -a ${destination} ${destination}.bak && sudo ln -s ${source} ${destination}`);
-    const created = await c.run("sudo", ["ln", "-s", source, destination]);
-    if (created.code !== 0) return result("keyd", "blocked", `Could not create ${destination}; run sudo ln -s ${source} ${destination}.`);
-    return true;
-  };
-  const madeDirectory = await c.run("sudo", ["mkdir", "-p", "/etc/keyd"]);
-  if (madeDirectory.code !== 0) return result("keyd", "blocked", "Could not create /etc/keyd; run sudo mkdir -p /etc/keyd.");
-  let changed = false;
-  for (const [source, destination] of links) {
-    const linked = await ensureSystemLink(source, destination);
-    if (typeof linked === "object") return linked;
-    changed ||= linked;
-  }
-  if (devices === undefined) {
-    const attention = ["Could not read /proc/bus/input/devices; existing Apple-specific configuration was preserved."];
-    if (!keyd) attention.push("keyd is not installed; linked configuration will not be applied until the selected package is installed.");
-    return result("keyd", changed ? "changed" : "unchanged", ...attention);
-  }
-  if (!hasAppleKeyboard) {
-    const existing = await lstat(appleDestination).catch(() => undefined);
-    if (existing?.isSymbolicLink() && resolve(dirname(appleDestination), await readlink(appleDestination)) === appleConfig) {
-      const removed = await c.run("sudo", ["rm", appleDestination]);
-      if (removed.code !== 0) return result("keyd", "failed", `Could not remove obsolete Apple-specific symlink ${appleDestination}.`);
-      changed = true;
+  const devices = await readFile(paths.inputDevices, "utf8").catch(() => undefined);
+  const hasApple = devices !== undefined && keydApplePresent.test(devices);
+  const directoryStat = await lstat(paths.directory).catch(() => undefined);
+  if (directoryStat && (!directoryStat.isDirectory() || directoryStat.uid !== owner || (directoryStat.mode & 0o022) !== 0)) return result("keyd", "blocked", `${paths.directory} must be a root-owned directory without group or world write access; repair it manually.`);
+  const recordPath = join(paths.directory, keydRecordFile);
+  const recordStat = directoryStat ? await lstat(recordPath).catch(() => undefined) : undefined;
+  const recorded = new Map<string, string>();
+  if (recordStat) {
+    if (!recordStat.isFile() || recordStat.uid !== owner || (recordStat.mode & 0o022) !== 0) return result("keyd", "blocked", `${recordPath} must be a root-owned regular file without group or world write access; repair it manually.`);
+    for (const line of (await readFile(recordPath, "utf8")).split("\n")) {
+      if (!line) continue;
+      const match = keydRecordLine.exec(line);
+      if (!match || recorded.has(match[2])) return result("keyd", "blocked", `${recordPath} is malformed; check the managed files, then remove it or repair it manually.`);
+      recorded.set(match[2], match[1]);
     }
   }
-  if (!keyd) return result("keyd", changed ? "changed" : "unchanged", "keyd is not installed; linked configuration will not be applied until the selected package is installed.");
+  const blocked: string[] = [];
+  const attention: string[] = [];
+  const steps: Step[] = [];
+  const next = new Map(recorded);
+  for (const [source, destination] of systemConfigurationFiles["keyd-config"] ?? []) {
+    const name = basename(destination);
+    const sourcePath = join(c.repoRoot, source);
+    const target = join(paths.directory, name);
+    const apple = source.includes("apple");
+    const desired = await digestOf(sourcePath);
+    const current = await inspect(target, owner, sourcePath);
+    const recordedDigest = recorded.get(name);
+    const write = (prior: Existing) => { steps.push({ kind: "copy", source: sourcePath, name, target, prior, config: true }); next.set(name, desired); };
+    if (apple && devices !== undefined && !hasApple) {
+      if ((current.kind === "link" && current.points) || (current.kind === "file" && current.owned && recordedDigest === current.digest)) {
+        steps.push({ kind: "remove", name, target, prior: current, config: true });
+        next.delete(name);
+      } else if (current.kind === "file" && current.owned && recordedDigest !== undefined) attention.push(`${target} was edited after my-setup published it, so it was kept; remove it manually if the Apple-specific mapping is no longer wanted.`);
+      continue;
+    }
+    if (apple && devices === undefined) {
+      if (current.kind === "link" && current.points) write(current);
+      continue;
+    }
+    if (current.kind === "absent") write(current);
+    else if (current.kind === "link") {
+      if (current.points) write(current);
+      else blocked.push(`${target} is a link that does not point at ${sourcePath}; preserve it and move it aside (sudo mv ${target} ${target}.bak), then rerun.`);
+    } else if (current.kind === "other") blocked.push(`${target} is not a regular file; move it aside, then rerun.`);
+    else if (!current.owned) blocked.push(`${target} is not owned by root; move it aside, then rerun.`);
+    else if (current.digest === desired) {
+      if (current.safe) next.set(name, desired);
+      else write(current);
+    } else if (recordedDigest === current.digest) write(current);
+    else blocked.push(`${target} differs from ${sourcePath} and was not published by my-setup; move it aside or restore it, then rerun.`);
+  }
+  if (blocked.length) return result("keyd", "blocked", ...blocked);
+  if (serialize(recorded) !== serialize(next)) {
+    const prior = await inspect(recordPath, owner);
+    steps.push(next.size
+      ? { kind: "record", name: keydRecordFile, target: recordPath, prior, config: false, content: serialize(next) }
+      : { kind: "remove", name: keydRecordFile, target: recordPath, prior, config: false });
+  }
+  if (devices === undefined) attention.push(`Could not read ${paths.inputDevices}; existing Apple-specific configuration was preserved.`);
+  const changed = steps.length > 0;
+  const configChanged = steps.some((step) => step.config);
+  if (changed && !directoryStat && !await sudoOk(c, ["install", "-d", "-o", "root", "-g", "root", "-m", "0755", paths.directory])) return result("keyd", "failed", `Could not create ${paths.directory}; run sudo install -d -o root -g root -m 0755 ${paths.directory}.`);
+  const applied: { applied: Applied[]; backup?: string; error?: string } = changed ? await applyKeydSteps(c, paths.directory, steps) : { applied: [] };
+  if (applied.error) return result("keyd", "failed", applied.error, ...attention);
+  if (applied.backup) attention.push(`Replaced or removed files were backed up to ${applied.backup}.`);
+  const status = changed ? "changed" : "unchanged";
+  const finish = (...extra: string[]) => result("keyd", status, ...attention, ...extra);
+  if (!keyd) return finish("keyd is not installed; installed configuration will not be applied until the selected package is installed.");
   const systemctl = executable(c, "systemctl");
-  if (!systemctl) return result("keyd", changed ? "changed" : "unchanged", "systemd is unavailable; linked configuration is preserved but keyd service state was not changed.");
+  if (!systemctl) return finish("systemd is unavailable; installed configuration is preserved but keyd service state was not changed.");
   const active = await c.run(systemctl, ["is-active", "--quiet", "keyd"], { quiet: true });
   const enabled = await c.run(systemctl, ["is-enabled", "--quiet", "keyd"], { quiet: true });
-  if (enabled.code !== 0) {
-    const enable = await c.run("sudo", ["systemctl", "enable", "keyd"]);
-    if (enable.code !== 0) return result("keyd", "failed", "Could not enable keyd; run sudo systemctl enable keyd.");
-  }
+  if (enabled.code !== 0 && !await sudoOk(c, ["systemctl", "enable", "keyd"])) return result("keyd", "failed", ...attention, "Could not enable keyd; run sudo systemctl enable keyd.");
   if (active.code !== 0) {
-    const start = await c.run("sudo", ["systemctl", "start", "keyd"]);
-    if (start.code !== 0) return result("keyd", "failed", "Could not start keyd; run sudo systemctl start keyd.");
-  } else if (changed) {
-    const reload = await c.run("sudo", [keyd, "reload"]);
-    if (reload.code !== 0) return result("keyd", "failed", "keyd configuration changed, but the active daemon could not reload it.");
+    if (!await sudoOk(c, ["systemctl", "start", "keyd"])) return result("keyd", "failed", ...attention, "Could not start keyd; run sudo systemctl start keyd.");
+    return finish();
   }
-  return result("keyd", changed ? "changed" : "unchanged");
+  if (!configChanged || await sudoOk(c, [keyd, "reload"])) return finish();
+  const restored = await restoreKeydSteps(c, paths.directory, applied.applied);
+  const detail = restored ?? ((await sudoOk(c, [keyd, "reload"])) ? "the previous configuration was restored and reloaded" : "the previous configuration was restored but keyd could not reload it; run sudo keyd reload");
+  return result("keyd", "failed", ...attention, `keyd configuration changed, but the active daemon could not reload it; ${detail}${applied.backup ? ` (backups: ${applied.backup})` : ""}.`);
 }
+
+async function withStage(c: RecipeContext, directory: string, action: (stage: string) => Promise<string | undefined>): Promise<string | undefined> {
+  const stage = join(directory, `.my-setup-stage-${randomUUID()}`);
+  if (!await sudoOk(c, ["mkdir", "-m", "0700", stage])) return `Could not create staging directory ${stage}.`;
+  const error = await action(stage);
+  const removed = await sudoOk(c, ["rm", "-rf", stage]);
+  return error ?? (removed ? undefined : `Could not remove staging directory ${stage}.`);
+}
+
+async function applyKeydSteps(c: RecipeContext, directory: string, steps: Step[]): Promise<{ applied: Applied[]; backup?: string; error?: string }> {
+  const workspace = await mkdtemp(join(tmpdir(), "my-setup-keyd-"));
+  const backup = join(directory, keydBackupRoot, `${new Date().toISOString().replace(/[:.]/g, "-")}-${randomUUID().slice(0, 8)}`);
+  const backups = new Map<Step, string>();
+  try {
+    if (steps.some((step) => step.prior.kind !== "absent")) {
+      if (!await sudoOk(c, ["install", "-d", "-o", "root", "-g", "root", "-m", "0700", join(directory, keydBackupRoot)]) || !await sudoOk(c, ["mkdir", "-m", "0700", backup])) return { error: `Could not create keyd backup directory ${backup}.`, applied: [] };
+      for (const step of steps) {
+        if (step.prior.kind === "absent") continue;
+        const path = step.prior.kind === "file" ? join(backup, step.name) : join(backup, `${step.name}.snapshot`);
+        const copied = step.prior.kind === "file"
+          ? await sudoOk(c, ["install", "-o", "root", "-g", "root", "-m", "0600", step.target, path])
+          : await sudoOk(c, ["cp", "-a", step.target, join(backup, step.name)]) && await sudoOk(c, ["install", "-o", "root", "-g", "root", "-m", "0600", step.target, path]);
+        if (!copied) return { error: `Could not back up ${step.target}; nothing was changed.`, applied: [] };
+        backups.set(step, path);
+      }
+    }
+    const applied: Applied[] = [];
+    const error = await withStage(c, directory, async (stage) => {
+      for (const step of steps) {
+        if (step.kind === "remove") continue;
+        const source = step.kind === "copy" ? step.source : join(workspace, step.name);
+        if (step.kind === "record") await writeFile(source, step.content);
+        if (!await sudoOk(c, ["install", "-o", "root", "-g", "root", "-m", "0644", source, join(stage, step.name)])) return `Could not stage ${step.target}; nothing was changed.`;
+      }
+      for (const step of steps) {
+        const published = step.kind === "remove" ? await sudoOk(c, ["rm", "-f", step.target]) : await sudoOk(c, ["mv", "-fT", join(stage, step.name), step.target]);
+        if (!published) return `Could not publish ${step.target}.`;
+        applied.push({ step, restoreFrom: backups.get(step) });
+      }
+      return undefined;
+    });
+    if (error) {
+      const restored = await restoreKeydSteps(c, directory, applied);
+      return { error: restored ? `${error} ${restored}` : `${error} Previous files were restored.`, applied: [] };
+    }
+    return { applied, backup: backups.size ? backup : undefined };
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+}
+
+async function restoreKeydSteps(c: RecipeContext, directory: string, applied: Applied[]): Promise<string | undefined> {
+  if (!applied.length) return undefined;
+  return withStage(c, directory, async (stage) => {
+    for (const { step, restoreFrom } of [...applied].reverse()) {
+      const restored = restoreFrom === undefined
+        ? await sudoOk(c, ["rm", "-f", step.target])
+        : await sudoOk(c, ["install", "-o", "root", "-g", "root", "-m", "0644", restoreFrom, join(stage, step.name)]) && await sudoOk(c, ["mv", "-fT", join(stage, step.name), step.target]);
+      if (!restored) return `Could not restore ${step.target}${restoreFrom ? ` from ${restoreFrom}` : ""}.`;
+    }
+    return undefined;
+  });
+}
+
 export async function installKeydFromSource(c: RecipeContext): Promise<ToolResult> {
   if (c.host.platform !== "linux") return result("keyd", "blocked", "The upstream keyd source route is Linux-only.");
   if (executable(c, "keyd") || executable(c, "keyd.rvaiya")) return result("keyd", "unchanged");
-  const git = executable(c, "git"), make = executable(c, "make"), curl = executable(c, "curl");
+  const git = executable(c, "git"), make = executable(c, "make");
   const apt = c.host.packageManagers.apt;
   const dpkg = executable(c, "dpkg-query"), cache = executable(c, "apt-cache");
-  if (!git || !make || !curl || !apt || !dpkg || !cache) return result("keyd", "blocked", "The keyd source build requires APT, git, make, curl, dpkg-query, and apt-cache.");
+  if (!git || !make || !apt || !dpkg || !cache) return result("keyd", "blocked", "The keyd source build requires APT, git, make, dpkg-query, and apt-cache.");
   const required = ["build-essential", "git"];
   const missing: string[] = [];
   for (const pkg of required) {
@@ -94,20 +207,17 @@ export async function installKeydFromSource(c: RecipeContext): Promise<ToolResul
     const installed = await c.run("sudo", [apt, "install", "-y", ...missing]);
     if (installed.code !== 0) return result("keyd", "failed", `Could not install missing APT keyd build prerequisites: ${missing.join(", ")}.`);
   }
-  const releases = await c.run(curl, ["-fsSL", "https://api.github.com/repos/rvaiya/keyd/releases/latest"], { quiet: true });
-  if (releases.code !== 0) return result("keyd", "failed", "Could not look up the latest stable keyd release.");
-  let tag = "";
-  try { const metadata = JSON.parse(releases.stdout ?? "") as { tag_name?: string; prerelease?: boolean }; if (metadata.prerelease !== true && metadata.tag_name) tag = metadata.tag_name; } catch { /* invalid metadata */ }
-  if (!tag) return result("keyd", "failed", "Keyd release metadata did not contain a stable tag.");
   const workspace = await mkdtemp(join(tmpdir(), "my-setup-keyd-"));
   try {
     const source = join(workspace, "keyd");
-    const cloned = await c.run(git, ["clone", "--quiet", "--depth", "1", "--branch", tag, "https://github.com/rvaiya/keyd.git", source]);
-    if (cloned.code !== 0) return result("keyd", "failed", `Could not clone keyd tag ${tag}.`);
+    const cloned = await c.run(git, ["clone", "--quiet", "--depth", "1", "--branch", keydPinnedTag, "https://github.com/rvaiya/keyd.git", source]);
+    if (cloned.code !== 0) return result("keyd", "failed", `Could not clone keyd ${keydPinnedTag}.`);
+    const head = await c.run(git, ["rev-parse", "HEAD"], { cwd: source, quiet: true });
+    if (head.code !== 0 || head.stdout?.trim() !== keydPinnedCommit) return result("keyd", "failed", `keyd ${keydPinnedTag} does not resolve to the pinned commit ${keydPinnedCommit}.`);
     const built = await c.run(make, [], { cwd: source });
-    if (built.code !== 0) return result("keyd", "failed", "Building the stable keyd release failed.");
+    if (built.code !== 0) return result("keyd", "failed", `Building keyd ${keydPinnedTag} failed.`);
     const installed = await c.run("sudo", [make, "install"], { cwd: source });
-    if (installed.code !== 0) return result("keyd", "failed", "Installing the stable keyd build failed.");
+    if (installed.code !== 0) return result("keyd", "failed", `Installing keyd ${keydPinnedTag} failed.`);
     const verified = await c.run("keyd", ["--version"], { quiet: true });
     if (verified.code !== 0) return result("keyd", "failed", "keyd was installed but did not pass its executable version check.");
     return result("keyd", "changed");

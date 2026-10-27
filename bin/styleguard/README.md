@@ -17,10 +17,15 @@ never fails just because a threshold was not reached.
 ## Requirements
 
 - [Bun](https://bun.sh) on `$PATH`.
-- 1Password CLI (`op`) signed in, with two items reachable:
-  - `gowinston` — your Winston AI API token.
-  - `OMP OPENAI` (vault `Personal`) — already used by `.omp/agent/models.yml`
-    for the `openai-api` provider; reused as-is, no new secret created.
+- 1Password CLI (`op`) signed in with your personal account, with two items reachable:
+  - `gowinston` (vault `Personal`) — your Winston AI API token.
+  - `OMP OPENAI` (vault `OMP`) — the key `.omp/agent/models.yml` uses for the
+    `openai-api` provider; reused as-is, no new secret created.
+
+Run from a shell where `OP_SERVICE_ACCOUNT_TOKEN` is unset. The OMP service
+account can read only the `OMP` vault, so it cannot read `gowinston`; granting
+it Winston access is not part of this setup, and styleguard does not work with
+the OMP token alone.
 
 No npm dependencies. HTTP calls use Bun's built-in `fetch`.
 
@@ -29,7 +34,7 @@ No npm dependencies. HTTP calls use Bun's built-in `fetch`.
 Both secrets are resolved at runtime via the `op` CLI, exactly like
 `.omp/agent/models.yml` does for its provider keys — never hardcoded.
 
-- **OpenAI** (rewriter): `op read "op://Personal/OMP OPENAI/password" --no-newline`
+- **OpenAI** (rewriter): `op read "op://OMP/OMP OPENAI/password" --no-newline`
 - **Winston AI** (detector): `op read "op://Personal/gowinston/password" --no-newline`.
 
   **Live-call status:** this reference could not be exercised end-to-end in

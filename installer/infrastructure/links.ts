@@ -183,23 +183,6 @@ export interface MigrationResult {
   conflict: boolean;
 }
 
-/** Preserve backed-up Git identity data only when the local override path is wholly absent. */
-export async function migrateGitIdentity(backupFile: string, home: string): Promise<MigrationResult> {
-  const destination = resolve(home, ".gitconfig.local");
-  if (await maybeLstat(destination)) return { migrated: false, conflict: true };
-  const sourceInfo = await lstat(backupFile);
-  if (!sourceInfo.isFile()) throw new Error(`Git configuration backup is not a regular file: ${backupFile}`);
-  await mkdir(dirname(destination), { recursive: true });
-  await copyFile(backupFile, destination, constants.COPYFILE_EXCL);
-  try {
-    await chmod(destination, 0o600);
-  } catch (error) {
-    await rm(destination, { force: true });
-    throw error;
-  }
-  return { migrated: true, conflict: false };
-}
-
 /** Move a backed-up zsh local override into the repository's ignored location without overwriting. */
 export async function migrateZshLocal(backupDirectory: string, repositoryRoot: string): Promise<MigrationResult> {
   const source = resolve(backupDirectory, ".config", "zsh", "local.zsh");

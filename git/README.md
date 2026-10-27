@@ -3,17 +3,25 @@
 `git/.gitconfig` holds portable, machine-independent defaults (default
 branch, push/pull/rebase behavior, aliases). It intentionally contains no
 identity, signing key, or credential helper — those are personal and/or
-platform-specific and belong in `~/.gitconfig.local`, which
-`git/.gitconfig` `[include]`s but this repo never creates or tracks.
+platform-specific and belong in `~/.gitconfig.local`, which the installer
+makes `~/.gitconfig` include last. This repo never creates or tracks it.
 
 ## Install
 
-```sh
-ln -sfn "$HOME/my-setup/git/.gitconfig" "$HOME/.gitconfig"
-```
+The installer's **git configuration** step writes no symlink. `~/.gitconfig`
+becomes a private regular file (mode 0600) with two managed blocks:
 
-Back up an existing `~/.gitconfig` first (`git config --global --list
---show-origin` shows what's currently set).
+- a top block that includes this repository's `git/.gitconfig` defaults;
+- your own lines, kept in place (credentials, `includeIf`, anything else);
+- a bottom block that includes `~/.gitconfig.local`, so its values load last.
+
+Re-running the step only rewrites the managed blocks, so it is safe to repeat.
+Before replacing an existing `~/.gitconfig`, it moves the old file into a
+`~/.dotfiles-backup-*` directory. A legacy symlink to `git/.gitconfig` is
+replaced; its `user.name` and `user.email` move into `~/.gitconfig.local`
+where that file does not already set them. The step blocks, and leaves
+everything untouched, when `~/.gitconfig` is a symlink to anything else, a
+directory, or malformed.
 
 ## `~/.gitconfig.local` (create once per machine, not tracked)
 
@@ -27,10 +35,9 @@ Nothing here is a secret by itself, but it's still personal and
 machine-specific (e.g. a different signing key on a work laptop), so it's
 kept out of the repo the same way `zsh/.config/zsh/local.zsh` is.
 
-Write it with `git config --file "$HOME/.gitconfig.local"`, never
-`git config --global`: `~/.gitconfig` is a link to this public repository's
-`git/.gitconfig`, so `--global` writes into the tracked file. Values there also
-come after the `[include]`, so they override `~/.gitconfig.local`.
+Write it with `git config --file "$HOME/.gitconfig.local"`. Avoid
+`git config --global` for identity and signing: it writes to `~/.gitconfig`,
+and values there load after `~/.gitconfig.local`, so they override it.
 
 ```sh
 git config --file "$HOME/.gitconfig.local" user.name "Your Name"

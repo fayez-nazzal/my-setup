@@ -1,5 +1,5 @@
 // `op read` wrappers, matching models.yml's invocation style
-// (`apiKey: "!op read \"op://Personal/OMP OPENAI/password\" --no-newline"`).
+// (`apiKey: "!op read \"op://OMP/OMP OPENAI/password\" --no-newline"`).
 // Secrets are never hardcoded; both are resolved at runtime via the
 // 1Password CLI.
 
@@ -21,9 +21,9 @@ export async function opRead(reference: string): Promise<string> {
   return execFileNode("op", ["read", reference, "--no-newline"]);
 }
 
-// The OpenAI key already used by .omp/agent/models.yml for the `openai-api`
-// provider. Reused as-is — no new secret created for the rewriter.
-const OPENAI_KEY_REF = "op://Personal/OMP OPENAI/password";
+// The OpenAI key used by .omp/agent/models.yml for the `openai-api` provider,
+// from the dedicated OMP vault. Reused as-is; no new secret created for the rewriter.
+const OPENAI_KEY_REF = "op://OMP/OMP OPENAI/password";
 
 // Winston AI API token, vault "Personal", item "gowinston", field
 // "password" — confirmed against this account's actual 1Password item.

@@ -28,19 +28,19 @@ followUpMode: all
 modelRoles:
   writer: openrouter/google/gemini-4-argon:high
   web: web/perplexity
-  default: kimi-code/k3.1-pro:low
+  default: openai-codex/gpt-6.1-terra
   tiny: minimax-code/MiniMax-M3.1-Flash:auto
   commit: minimax-code/MiniMax-M3.1-Flash:auto
   task: anthropic/claude-haiku-5-5:auto
   plan: anthropic/claude-opus-5-5:high
-  vision: openai-codex/gpt-6-luna:auto
-  advisor: openai-codex/gpt-6.1-sol:auto
+  vision: openai-codex/gpt-6.1-terra:auto
+  advisor: kimi-code/k3.1-pro:low
   image: openai-codex/gpt-image-1:auto
   speech: local/kokoro
-  slow: anthropic/claude-opus-5-5:auto
+  slow: openai-codex/gpt-6.1-sol:auto
   judge: openai-codex/gpt-6.1-sol:auto
   memory: openai-codex/gpt-6.1-sol:auto
-  smol: anthropic/claude-haiku-5-5:auto
+  smol: openai-codex/gpt-6-luna:auto
   dictation: local/parakeet-tdt-0.6b-v3
   review: openai-codex/gpt-6.1-sol:auto
   SECONDARY: openai-codex/gpt-6.1-sol:auto
@@ -49,46 +49,47 @@ retry:
   fallbackChains:
     plan:
       - openai-codex/gpt-6.1-sol
-      - anthropic/claude-sonnet-5-5
+      - kimi-code/k3.1-pro
     memory:
       - anthropic/claude-sonnet-5-5
-      - openai-codex/gpt-6-luna
+      - minimax-code/MiniMax-M3.1-Flash
     task:
       - openai-codex/gpt-6-luna
-    slow:
-      - anthropic/claude-sonnet-5-5
-      - openai-codex/gpt-6.1-sol
+      - minimax-code/MiniMax-M3.1-Flash
     writer:
       - anthropic/claude-opus-5-5
       - openai-codex/gpt-6.1-sol
     smol:
-      - openai-codex/gpt-6-luna
-      - anthropic/claude-haiku-5-5
+      - minimax-code/MiniMax-M3.1-Flash
     judge:
-      - openai-codex/gpt-6.1-sol
+      - anthropic/claude-sonnet-5-5
     tiny:
       - openai-codex/gpt-6-luna
       - anthropic/claude-haiku-5-5
     commit:
       - openai-codex/gpt-6-luna
       - anthropic/claude-haiku-5-5
-    vision:
-      - anthropic/claude-haiku-5-5
-      - openai-codex/gpt-6-luna
     advisor:
       - anthropic/claude-sonnet-5-5
+      - minimax-code/MiniMax-M3.1-Flash
     review:
       - anthropic/claude-haiku-5-5
       - openai-codex/gpt-6.1-sol
-    default:
-      - openai-codex/gpt-6.1-sol
-      - anthropic/claude-sonnet-5-5
+      - minimax-code/MiniMax-M3.1-Flash
     SECONDARY:
       - anthropic/claude-opus-5-5
       - openai-codex/gpt-6.1-sol
     EXTREME:
       - anthropic/claude-opus-5-5
       - openai-codex/gpt-6-astra
+    default:
+      - anthropic/claude-sonnet-5-5
+    slow:
+      - openai-codex/gpt-6.1-terra
+      - kimi-code/k3.1-pro
+    vision:
+      - anthropic/claude-sonnet-5-5
+      - minimax-code/MiniMax-M3.1-Flash
   waitForUsageReset: true
 dev:
   autoqaConsent: denied
@@ -108,6 +109,20 @@ astGrep:
   enabled: true
 security:
   enabled: true
+bash:
+  patterns:
+    - match: op
+      approval: deny
+    - match: op *
+      approval: deny
+    - match: "*/op"
+      approval: deny
+    - match: "*/op *"
+      approval: deny
+    - match: "* op"
+      approval: deny
+    - match: "* op *"
+      approval: deny
 checkpoint:
   enabled: true
 computer:
@@ -116,3 +131,4 @@ codexResets:
   autoRedeem: "no"
 claudeResets:
   autoRedeem: "no"
+extendedContext: false

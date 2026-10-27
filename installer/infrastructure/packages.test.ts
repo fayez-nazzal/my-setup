@@ -1,7 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
+import { chmod, copyFile, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { commands } from "./commands";
 import { inspectPackage, installRecipe } from "./packages";
 import type { HostFacts } from "./host";
 import type { PackageContext } from "./packages";
+import type { DownloadPins } from "../domain/download-pins";
 function context(executables: Map<string,string>, response: (command:string,args:readonly string[]) => {code:number;stdout:string;stderr:string}): PackageContext {
   const host: HostFacts = { platform:"linux", architecture:"x64", home:"/tmp/test-home", repositoryRoot:"/tmp/repo", executables, packageManagers:{} , gnome:{active:false}, graphical:true, macOS:{} };
   return { host, home:host.home, repoRoot:host.repositoryRoot, ensureLink:async () => "unchanged", run:async (command,args) => response(command,args) };
@@ -35,6 +41,32 @@ function recorded(executables: Map<string, string>, respond: (command: string, a
   return { ctx, calls };
 }
 
+/** A tar.gz of `files` built with the real tar; returns its path and the SHA-256 the pin must carry. */
+async function fixtureArchive(directory: string, files: Record<string, string>): Promise<{ archive: string; digest: string }> {
+  const source = join(directory, "pkg");
+  await mkdir(source);
+  for (const [name, body] of Object.entries(files)) {
+    await writeFile(join(source, name), body);
+    await chmod(join(source, name), 0o755);
+  }
+  const archive = join(directory, "fixture.tar.gz");
+  const made = await commands.run(Bun.which("tar")!, ["-czf", archive, "-C", source, ...Object.keys(files)], { quiet: true });
+  if (made.code !== 0) throw new Error(made.stderr);
+  return { archive, digest: createHash("sha256").update(await readFile(archive)).digest("hex") };
+}
+
+/** Real tar and real probes; the fixture curl copies the local archive to the path it is asked to write. */
+function fixtureContext(home: string, archive: string, calls: Call[]): PackageContext {
+  const curl = "/fixture/curl";
+  const host: HostFacts = { platform: "linux", architecture: "x64", home, repositoryRoot: "/tmp/repo", executables: new Map([["curl", curl], ["tar", Bun.which("tar")!]]), packageManagers: {}, gnome: { active: false }, graphical: true, macOS: {} };
+  return { host, home, repoRoot: host.repositoryRoot, ensureLink: async () => "unchanged", run: async (command, args, options) => {
+    calls.push({ command, args, env: options?.env });
+    if (command !== curl) return commands.run(command, args, options);
+    await copyFile(archive, args[args.indexOf("-o") + 1]!);
+    return { code: 0, stdout: "", stderr: "" };
+  } };
+}
+
 describe("Volta and Node LTS", () => {
   const ok = { code: 0, stdout: "", stderr: "" };
   test("healthy Volta is never reinstalled", async () => {
@@ -44,21 +76,33 @@ describe("Volta and Node LTS", () => {
     expect(result.code).toBe(0);
     expect(calls.some(call => call.command === "/usr/bin/curl")).toBe(false);
   });
-  test("missing Volta uses the official installer without editing shell startup files", async () => {
-    const { ctx, calls } = recorded(new Map([["curl", "/usr/bin/curl"], ["bash", "/bin/bash"]]), () => ok);
-    const state = await inspectPackage(ctx, "volta");
-    expect(state).toMatchObject({ installed: false, route: "volta-installer" });
-    expect((await installRecipe(ctx, "volta")).code).toBe(0);
-    const fetch = calls.find(call => call.command === "/usr/bin/curl")!;
-    expect(fetch.args).toContain("https://get.volta.sh");
-    const run = calls.find(call => call.command === "/bin/bash")!;
-    expect(run.args.at(-1)).toBe("--skip-setup");
+  test("missing Volta installs the pinned archive into VOLTA_HOME/bin and never runs setup", async () => {
+    const sandbox = await mkdtemp(join(tmpdir(), "volta-install-"));
+    const home = join(sandbox, "home"), voltaHome = join(home, ".volta");
+    const saved = process.env.VOLTA_HOME;
+    process.env.VOLTA_HOME = voltaHome;
+    try {
+      await mkdir(home);
+      const probe = `#!/bin/sh\n[ "$VOLTA_HOME" = "${voltaHome}" ] && echo 2.0.2\n`;
+      const { archive, digest } = await fixtureArchive(sandbox, { volta: probe, "volta-shim": "#!/bin/sh\nexit 0\n", "volta-migrate": "#!/bin/sh\nexit 0\n" });
+      const pins: DownloadPins = { volta: { "linux-x64": { version: "2.0.2", url: "https://fixture.invalid/volta-2.0.2-linux.tar.gz", digest, members: ["volta", "volta-shim", "volta-migrate"] } } };
+      const calls: Call[] = [];
+      expect(await installRecipe(fixtureContext(home, archive, calls), "volta", pins)).toMatchObject({ code: 0 });
+      expect((await readdir(join(voltaHome, "bin"))).sort()).toEqual(["volta", "volta-migrate", "volta-shim"]);
+      expect(await readdir(home)).toEqual([".volta"]);
+      expect(calls.some(call => call.args.includes("setup"))).toBe(false);
+    } finally {
+      if (saved === undefined) delete process.env.VOLTA_HOME; else process.env.VOLTA_HOME = saved;
+      await rm(sandbox, { recursive: true, force: true });
+    }
   });
-  test("Volta is unavailable without curl and bash", async () => {
-    const { ctx } = recorded(new Map(), () => ({ code: 1, stdout: "", stderr: "" }));
-    const state = await inspectPackage(ctx, "volta");
-    expect(state.route).toBeUndefined();
-    expect((await installRecipe(ctx, "volta")).code).toBe(1);
+  test("Volta needs curl and tar for its pinned archive, not bash", async () => {
+    const withoutTar = recorded(new Map([["curl", "/usr/bin/curl"], ["bash", "/bin/bash"]]), () => ok);
+    expect(await inspectPackage(withoutTar.ctx, "volta")).toMatchObject({ installed: false, healthy: false, reason: "curl and tar are required to install the pinned Volta archive." });
+    expect((await installRecipe(withoutTar.ctx, "volta")).code).toBe(1);
+    expect(withoutTar.calls.length).toBe(0);
+    const withoutBash = recorded(new Map([["curl", "/usr/bin/curl"], ["tar", "/usr/bin/tar"]]), () => ok);
+    expect((await inspectPackage(withoutBash.ctx, "volta")).route).toBe("github-release");
   });
   test("Node LTS is installed through Volta with an explicit VOLTA_HOME", async () => {
     const { ctx, calls } = recorded(new Map([["volta", "/h/.volta/bin/volta"]]), (_c, args) => args[0] === "list" ? ok : ok);

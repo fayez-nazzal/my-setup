@@ -28,21 +28,59 @@ cron schedule `GITHUB_TOOLS_CRON` are plain variables next to it. Run
 applies to this machine. Removing an entry stops syncing it; its checkout and
 link stay until you delete them.
 
+## Trusted commits
+
+A sync builds and links only commits signed by an owner key you enrolled on this
+machine. There is no trust on first use: the first clone is verified like any
+other update. Nothing is trusted because GitHub says so: the `web-flow` key and
+the API's `verified` flag are never consulted, and no key is imported
+automatically.
+
+Enrolled keys live outside the repository in `~/.config/my-setup/tool-trust/`:
+
+| File | Contents |
+| --- | --- |
+| `allowed_signers` | SSH keys, one per line: `my-setup-owner namespaces="git" <public key>` |
+| `owner-keys.asc` | OpenPGP public keys, ASCII-armored |
+
+Both files must be regular files, not symlinks, owned by your user with mode
+`0600`; the directory must be a real directory with mode `0700`. Anything else
+fails closed. Only public keys belong here; never copy a private key in.
+
+To enroll a key:
+
+1. Confirm its fingerprint from a source you control: `ssh-keygen -lf <key>.pub`
+   for SSH, `gpg --show-keys --fingerprint <key>.asc` for OpenPGP.
+2. Add the SSH public key to `allowed_signers` as `my-setup-owner namespaces="git" <public key>`.
+   Export the OpenPGP public key with `gpg --armor --export <fingerprint>` and append it to `owner-keys.asc`.
+3. Set the modes: `chmod 700 ~/.config/my-setup/tool-trust`, then `chmod 600` on both files.
+
+Verification uses git itself. SSH-signed commits are checked with
+`ssh-keygen` against `allowed_signers` alone. OpenPGP-signed commits are checked
+in a throwaway keyring that holds only `owner-keys.asc`; your `~/.gnupg` is never
+read. Each commit needs exactly one signature. An unsigned commit, or an
+unsupported signature format, fails that tool with `has no single SSH or OpenPGP
+signature`. A signature from a key that is not enrolled fails it with `not signed
+by an enrolled owner key`. Nothing is built or linked for either, and the
+previous binary stays in place. A missing or unsafe trust file fails the same
+way, with `trust material`.
+
+What signatures do not cover:
+
+- Ignored files, `node_modules`, and local edits made after checkout.
+- The toolchain (bun, node, compilers). A signed change can still pull in
+  malicious dependencies; signatures do not vet them.
+- A compromised owner key. Remove the key from the trust files to revoke it.
+- The TPM, AeroSpace, Alacritty, zsh-abbr, and fzf source builds. Each is a
+  separate trust surface and is not covered by this gate.
+
 ## What a sync does
 
 For each tool that applies to this platform:
 
-1. **Clone** it when `~/tools/<name>` is missing. A checkout found in the
-   earlier location `~/repos/tools/<name>` is moved instead of re-cloned.
-2. **Update** it with `git fetch` plus a fast-forward merge, but only when the
-   checkout is on its default branch, has no uncommitted changes to tracked
-   files, and has no local commits. Otherwise the line says why it was skipped,
-   so work in progress is never touched.
-3. **Build** only when the commit or the build command changed since the last
-   successful build, or a linked file is missing. The last good build is
-   recorded in `.git/my-setup-build`, so an unchanged tool costs one
-   `git fetch`. A failed build leaves the previous binary in place and is
-   retried on the next sync.
+1. **Clone** it when `~/tools/<name>` is missing. The default branch is fetched into a private staging directory, its tip is verified, and only then is it checked out into place. A checkout found in the earlier location `~/repos/tools/<name>` is moved instead of re-cloned, and its HEAD is verified like any other.
+2. **Update** it with `git fetch` plus a fast-forward merge, but only when the checkout is on its default branch, has no uncommitted changes to tracked files, and has no local commits. The fetched tip must verify before it is merged. Otherwise the line says why it was skipped, and the tool is neither built nor linked, so work in progress is never touched.
+3. **Build** only when the commit or the build command changed since the last successful build, or a linked file is missing. HEAD must pass the trust check first on every sync (see [Trusted commits](#trusted-commits)). The last good build is recorded in `.git/my-setup-build`, so an unchanged tool costs one `git fetch` and one signature check. A failed build leaves the previous binary in place and is retried on the next sync.
 4. **Link** each command into `~/.local/bin`. Existing symlinks are retargeted;
    a real file in the way is left alone and reported.
 

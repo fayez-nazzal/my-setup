@@ -1,0 +1,13 @@
+#!/bin/sh
+# Claude Code headersHelper for the Excalidraw MCP server. It reads the key from
+# MY_SETUP_CLAUDE_EXCALIDRAW_KEY, which the `claude` launcher (zsh rc.d/71-claude.zsh)
+# sets once at session start. It never contacts the credential store, never reads
+# the OMP token, and never runs `op`. The key is piped to jq on stdin, so it never
+# appears in argv.
+set -eu
+
+if [ -z "${MY_SETUP_CLAUDE_EXCALIDRAW_KEY:-}" ]; then
+  echo "claude: MY_SETUP_CLAUDE_EXCALIDRAW_KEY is unset; start Claude with the claude launcher (see zsh/README.md)." >&2
+  exit 1
+fi
+printf '%s' "$MY_SETUP_CLAUDE_EXCALIDRAW_KEY" | jq -Rs '{Authorization: ("Bearer " + .)}'

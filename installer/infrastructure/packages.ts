@@ -1,9 +1,11 @@
-import { randomBytes } from "node:crypto";
-import { mkdtemp, readFile, readdir, stat, lstat, mkdir, copyFile, rm, rename, chmod } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, stat, lstat, mkdir, copyFile, rm, rename } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, basename } from "node:path";
 import type { HostFacts } from "./host.ts";
 import type { CommandOptions } from "../application/ports";
+import { downloadPins, pinFor } from "../domain/download-pins";
+import type { ArchivePin, DownloadPins } from "../domain/download-pins";
+import { publishExecutables, unpackPinnedArchive } from "./downloads";
 
 export interface CommandResult { code: number; stdout: string; stderr: string }
 export type RunCommand = (executable: string, args: readonly string[], options?: CommandOptions) => Promise<CommandResult>;
@@ -247,33 +249,18 @@ export async function inspectSoftware(context: PackageContext, id: string): Prom
     const candidates = await Promise.all(names.map(name => aptCandidate(context, name)));
     if (candidates.every(Boolean)) return { installed: false, healthy: false, route: "apt", packageName: pkg };
     if (["starship", "zoxide", "fzf", "bat", "eza", "fd", "ripgrep", "killport"].includes(id)) {
-      if (id in linuxReleases) return { installed: false, healthy: false, route: "github-release", reason: `Latest ${context.host.architecture === "x64" ? "x86_64" : "aarch64"} Linux GNU release archive` };
-      if (id === "starship" || id === "zoxide") return { installed: false, healthy: false, route: "upstream-script" };
+      if (releasePin(context, id)) return { installed: false, healthy: false, route: "github-release" };
       if (id === "fzf") return { installed: false, healthy: false, route: "git-checkout" };
     }
-    if (id === "keyd") return { installed: false, healthy: false, route: "keyd-source-build", reason: "No APT keyd candidate; build the latest stable upstream release with APT build prerequisites." };
+    if (id === "keyd") return { installed: false, healthy: false, route: "keyd-source-build", reason: "No APT keyd candidate; build the pinned upstream keyd v2.6.0 release with APT build prerequisites." };
     return { installed: false, healthy: false, reason: `APT candidate unavailable: ${names.filter((_, i) => !candidates[i]).join(", ")}` };
   }
   if (["starship", "zoxide", "fzf", "bat", "eza", "fd", "ripgrep", "killport"].includes(id) && context.host.platform === "linux") {
-    if (id in linuxReleases) return { installed: false, healthy: false, route: "github-release", reason: `Latest ${context.host.architecture === "x64" ? "x86_64" : "aarch64"} Linux GNU release archive` };
-    if (id === "starship") return { installed: false, healthy: false, route: "upstream-script" };
-    if (id === "zoxide") return { installed: false, healthy: false, route: "upstream-script" };
+    if (releasePin(context, id)) return { installed: false, healthy: false, route: "github-release" };
     if (id === "fzf") return { installed: false, healthy: false, route: "git-checkout" };
   }
   if (id === "zsh-abbr") return { installed: false, healthy: false, route: brew ? "brew" : "git-checkout", packageName: "olets/tap/zsh-abbr" };
   return { installed: false, healthy: false, reason: "No supported installation route is available." };
-}
-
-async function downloadScript(context: PackageContext, url: string, args: string[]): Promise<CommandResult> {
-  const curl = commandFor(context.host, "curl"), bash = commandFor(context.host, "bash");
-  if (!curl || !bash) return { code: 1, stdout: "", stderr: "curl and bash are required" };
-  const directory = await mkdtemp(join(tmpdir(), "setup-installer-"));
-  try {
-    const script = join(directory, "install.sh");
-    const fetched = await context.run(curl, ["-fsSL", "-o", script, url]);
-    if (fetched.code !== 0) return fetched;
-    return await context.run(bash, [script, ...args]);
-  } finally { await rm(directory, { recursive: true, force: true }); }
 }
 
 async function installCheckout(context: PackageContext, id: string): Promise<CommandResult> {
@@ -309,84 +296,62 @@ export async function brewPackageCommand(context: PackageContext, verb: "install
   return result;
 }
 
-/** GitHub release archives for Linux GNU hosts; `asset` receives the CPU name (x86_64 or aarch64). */
-const linuxReleases: Record<string, { repo: string; asset: (cpu: string) => string }> = {
-  bat: { repo: "sharkdp/bat", asset: cpu => `^bat-.+-${cpu}-unknown-linux-gnu\\.tar\\.gz$` },
-  eza: { repo: "eza-community/eza", asset: cpu => `^eza_${cpu}-unknown-linux-gnu\\.tar\\.gz$` },
-  killport: { repo: "jkfran/killport", asset: cpu => `^killport-${cpu}-linux-gnu\\.tar\\.gz$` },
-};
+/** The pinned artifact for this host, or undefined when no pin exists and the install must refuse. */
+function releasePin(context: PackageContext, id: string, pins: DownloadPins = downloadPins): ArchivePin | undefined {
+  return pinFor(pins, id, context.host.platform, context.host.architecture);
+}
 
-async function installRelease(context: PackageContext, id: string): Promise<CommandResult> {
-  const curl = commandFor(context.host, "curl"), tar = commandFor(context.host, "tar");
-  if (!curl || !tar) return { code: 1, stdout: "", stderr: "curl and tar are required for GNU release installation" };
-  const release = linuxReleases[id];
-  if (!release) return { code: 1, stdout: "", stderr: `No GitHub release route for ${id}` };
-  const cpu = context.host.architecture === "x64" ? "x86_64" : "aarch64";
-  const repo = release.repo;
-  const directory = await mkdtemp(join(tmpdir(), "setup-release-"));
+/** Verify and unpack the pinned archive, then publish its members at `destinationFor`; `verify` runs after publication and any failure restores the previous files. */
+async function installPinnedArchive(context: PackageContext, pin: ArchivePin, destinationFor: (member: string) => string, verify: () => Promise<void>): Promise<CommandResult> {
+  const directory = await mkdtemp(join(tmpdir(), "setup-pinned-"));
   try {
-    const response = await context.run(curl, ["-fsSL", `https://api.github.com/repos/${repo}/releases/latest`], { quiet: true });
-    if (response.code !== 0) return response;
-    const metadata = JSON.parse(response.stdout) as { assets?: Array<{ name?: string; browser_download_url?: string }> };
-    const pattern = release.asset(cpu);
-    const asset = metadata.assets?.find(item => item.name && new RegExp(pattern).test(item.name) && item.browser_download_url);
-    if (!asset?.name || !asset.browser_download_url) throw new Error(`No Linux GNU ${cpu} ${id} release asset`);
-    const archive = join(directory, asset.name);
-    const fetched = await context.run(curl, ["-fsSL", "-o", archive, asset.browser_download_url]);
-    if (fetched.code !== 0) return fetched;
-    const unpacked = join(directory, "unpacked"); await mkdir(unpacked);
-    const extracted = await context.run(tar, ["-xzf", archive, "-C", unpacked]);
-    if (extracted.code !== 0) return extracted;
-    const executable = id;
-    let binary: string | undefined;
-    for (const entry of await readdir(unpacked, { withFileTypes: true })) if (entry.isDirectory()) {
-      try { await stat(join(unpacked, entry.name, executable)); binary = join(unpacked, entry.name, executable); break; } catch { /* continue */ }
-    }
-    if (!binary) throw new Error(`Archive contains no ${executable} binary`);
-    await placeUserExecutable(context, binary, executable);
-    return { code: 0, stdout: `${id} installed and verified`, stderr: "" };
+    const unpacked = await unpackPinnedArchive(context, pin, directory);
+    await publishExecutables(context, pin.members.map(member => ({ source: join(unpacked, member), destination: destinationFor(member) })), verify);
+    return { code: 0, stdout: "installed and verified", stderr: "" };
   } catch (error) { return { code: 1, stdout: "", stderr: error instanceof Error ? error.message : String(error) }; }
   finally { await rm(directory, { recursive: true, force: true }); }
 }
 
-/** Stage a downloaded binary as ~/.local/bin/<name>, probe it, then swap it in; a replaced file is kept in the backup tree. */
+/** Install a pinned single-binary release as ~/.local/bin/<id>; its version probe gates the publish. */
+async function installPinnedRelease(context: PackageContext, id: string, pins: DownloadPins): Promise<CommandResult> {
+  const pin = releasePin(context, id, pins);
+  if (!pin) return { code: 1, stdout: "", stderr: `No pinned ${id} release for ${context.host.platform}-${context.host.architecture}.` };
+  const destination = join(context.home, ".local/bin", id);
+  return installPinnedArchive(context, pin, () => destination, () => requireVersionProbe(context, destination, id));
+}
+
+async function requireVersionProbe(context: PackageContext, executable: string, name: string, env: Record<string, string> = {}): Promise<void> {
+  const probe = await context.run(executable, ["--version"], { quiet: true, env });
+  if (probe.code !== 0) throw new Error(`${name} release failed its version probe`);
+}
+
+/** Publish a downloaded binary as ~/.local/bin/<name>; a replaced file goes to the backup tree and is restored if the version probe fails. */
 export async function placeUserExecutable(context: PackageContext, binary: string, name: string): Promise<string> {
-  const binDirectory = join(context.home, ".local/bin");
-  const destination = join(binDirectory, name);
-  await mkdir(binDirectory, { recursive: true });
-  const staged = `${destination}.stage-${process.pid}-${randomBytes(5).toString("hex")}`;
-  let backup: string | undefined;
-  try {
-    await copyFile(binary, staged);
-    await chmod(staged, 0o755);
-    const probe = await context.run(staged, ["--version"], { quiet: true });
-    if (probe.code !== 0) throw new Error(`${name} release failed its version probe`);
-    if (await lstat(destination).then(() => true).catch(() => false)) {
-      if (!context.backupUserFile) throw new Error(`Cannot replace ${destination}; user-file backup support is unavailable.`);
-      backup = await context.backupUserFile(destination);
-    }
-    await rename(staged, destination);
-    return destination;
-  } catch (error) {
-    await rm(staged, { force: true }).catch(() => undefined);
-    if (backup) {
-      try { await rename(backup, destination); }
-      catch (restoreError) { throw new Error(`Could not place ${name}; original remains at ${backup}; restoration failed: ${restoreError instanceof Error ? restoreError.message : String(restoreError)}`); }
-    }
-    throw error;
-  }
+  const destination = join(context.home, ".local/bin", name);
+  await publishExecutables(context, [{ source: binary, destination }], () => requireVersionProbe(context, destination, name));
+  return destination;
 }
 
 export async function inspectPackage(context: PackageContext, id: string): Promise<SoftwareState> {
   return inspectSoftware(context, id);
 }
 
-const voltaEnv = (context: PackageContext): Record<string, string> => ({ VOLTA_HOME: process.env.VOLTA_HOME ?? join(context.home, ".volta") });
+const voltaEnv = (context: PackageContext): { VOLTA_HOME: string } => ({ VOLTA_HOME: process.env.VOLTA_HOME ?? join(context.home, ".volta") });
 
 async function inspectVolta(context: PackageContext): Promise<SoftwareState> {
   if (await executableHealthy(context, "volta")) return { installed: true, healthy: true };
-  if (!commandFor(context.host, "curl") || !commandFor(context.host, "bash")) return { installed: false, healthy: false, reason: "curl and bash are required for the official Volta installer." };
-  return { installed: false, healthy: false, route: "volta-installer" };
+  if (!releasePin(context, "volta")) return { installed: false, healthy: false, reason: `No pinned Volta release for ${context.host.platform}-${context.host.architecture}.` };
+  if (!commandFor(context.host, "curl") || !commandFor(context.host, "tar")) return { installed: false, healthy: false, reason: "curl and tar are required to install the pinned Volta archive." };
+  return { installed: false, healthy: false, route: "github-release" };
+}
+
+/** Publish Volta's pinned binaries into $VOLTA_HOME/bin; the installed `volta` must answer --version before the install counts. Setup and shell profiles are never touched. */
+async function installVolta(context: PackageContext, pins: DownloadPins): Promise<CommandResult> {
+  const pin = releasePin(context, "volta", pins);
+  if (!pin) return { code: 1, stdout: "", stderr: `No pinned Volta release for ${context.host.platform}-${context.host.architecture}.` };
+  const env = voltaEnv(context);
+  const bin = join(env.VOLTA_HOME, "bin");
+  return installPinnedArchive(context, pin, member => join(bin, member), () => requireVersionProbe(context, join(bin, "volta"), "volta", env));
 }
 
 async function inspectNodeLts(context: PackageContext): Promise<SoftwareState> {
@@ -398,7 +363,7 @@ async function inspectNodeLts(context: PackageContext): Promise<SoftwareState> {
   return { installed: false, healthy: false, route: "volta-node" };
 }
 
-export async function installRecipe(context: PackageContext, id: string): Promise<CommandResult> {
+export async function installRecipe(context: PackageContext, id: string, pins: DownloadPins = downloadPins): Promise<CommandResult> {
   if (id === "node-lts") {
     const state = await inspectNodeLts(context);
     if (state.installed) return { code: 0, stdout: "Volta already provides a default Node runtime", stderr: "" };
@@ -410,9 +375,9 @@ export async function installRecipe(context: PackageContext, id: string): Promis
     const state = await inspectVolta(context);
     if (state.installed) return { code: 0, stdout: "volta is already healthy", stderr: "" };
     if (!state.route) return { code: 1, stdout: "", stderr: state.reason ?? "Volta cannot be installed." };
-    return downloadScript(context, "https://get.volta.sh", ["--skip-setup"]);
+    return installVolta(context, pins);
   }
-  if (id === "nerd-font") return installGeistFont(context);
+  if (id === "nerd-font") return installGeistFont(context, pins);
   const state = await inspectSoftware(context, id);
   if (state.route === "brew-upgrade" && state.packageName) return brewPackageCommand(context, "upgrade", state.packageName);
   if (state.installed) return { code: 0, stdout: `${id} is already healthy`, stderr: "" };
@@ -420,10 +385,8 @@ export async function installRecipe(context: PackageContext, id: string): Promis
   if (state.route === "brew" && state.packageName) return brewPackageCommand(context, "install", state.packageName);
   if (state.route === "brew-reinstall" && state.packageName) return brewPackageCommand(context, "reinstall", state.packageName);
   if ((state.route === "apt" || state.route === "apt-reinstall") && state.packageName) return installApt(context, state.packageName, state.route === "apt-reinstall");
-  if (state.route === "upstream-script" && id === "starship") return downloadScript(context, "https://starship.rs/install.sh", ["-y", "-b", join(context.home, ".local/bin")]);
-  if (state.route === "upstream-script" && id === "zoxide") return downloadScript(context, "https://raw.githubusercontent.com/ajeetdsouza/zoxide/main/install.sh", []);
   if (state.route === "git-checkout" && (id === "fzf" || id === "zsh-abbr")) return installCheckout(context, id);
-  if (state.route === "github-release" && id in linuxReleases) return installRelease(context, id);
+  if (state.route === "github-release") return installPinnedRelease(context, id, pins);
   return { code: 1, stdout: "", stderr: state.reason ?? `Recipe for ${id} requires its dedicated source adapter` };
 }
 
@@ -552,7 +515,7 @@ export async function inspectGeistFont(context: PackageContext): Promise<Softwar
   return { installed: false, healthy: false, route: "font-download", reason: result.detail };
 }
 
-export async function installGeistFont(context: PackageContext): Promise<CommandResult> {
+export async function installGeistFont(context: PackageContext, pins: DownloadPins = downloadPins): Promise<CommandResult> {
   const state = await inspectGeistFont(context);
   if (state.installed) return { code: 0, stdout: "Exact Geist Mono Nerd Font faces already installed", stderr: "" };
   if (state.route === "apt-fontconfig" || state.route === "brew-fontconfig") {
@@ -576,26 +539,15 @@ export async function installGeistFont(context: PackageContext): Promise<Command
   const fcCache = commandFor(context.host, "fc-cache");
   const missing = [!curl && "curl", !tar && "tar", context.host.platform === "linux" && !fcList && "fc-list", context.host.platform === "linux" && !fcMatch && "fc-match", context.host.platform === "linux" && !fcCache && "fc-cache"].filter(Boolean);
   if (missing.length) return { code: 1, stdout: "", stderr: `Required font installation commands are missing: ${missing.join(", ")}` };
+  const pin = releasePin(context, "nerd-font", pins);
+  if (!pin) return { code: 1, stdout: "", stderr: `No pinned Nerd Font release for ${context.host.platform}-${context.host.architecture}.` };
   const work = await mkdtemp(join(tmpdir(), "geist-nerd-font-"));
   const placed: Array<{ destination: string; backup?: string }> = [];
   try {
-    const api = await context.run(curl!, ["-fsSL", "https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest"], { quiet: true });
-    if (api.code !== 0) return api;
-    const metadata = JSON.parse(api.stdout) as { tag_name?: string; prerelease?: boolean; assets?: Array<{ name?: string; browser_download_url?: string }> };
-    if (!metadata.tag_name || metadata.prerelease) throw new Error("Latest Nerd Fonts release metadata is invalid or unstable");
-    const asset = metadata.assets?.find(item => item.name === "GeistMono.tar.xz" && item.browser_download_url);
-    if (!asset?.browser_download_url) throw new Error("Stable release has no GeistMono.tar.xz asset");
-    const archive = join(work, "font.tar.xz");
-    const download = await context.run(curl!, ["-fsSL", "-o", archive, asset.browser_download_url]);
-    if (download.code !== 0) return download;
-    const unpacked = join(work, "unpacked"); await mkdir(unpacked);
-    const extracted = await context.run(tar!, ["-xJf", archive, "-C", unpacked]);
-    if (extracted.code !== 0) return extracted;
+    const unpacked = await unpackPinnedArchive(context, pin, work);
     const all = await readdir(unpacked);
-    const required = styles.map(style => `GeistMonoNerdFontMono-${style}.otf`);
-    for (const file of required) if (!all.includes(file)) throw new Error(`Archive is missing required font face ${file}`);
     const faces = all.filter(name => /^GeistMonoNerdFontMono-.*\.otf$/.test(name));
-    const target = context.host.platform === "darwin" ? join(context.host.home, "Library/Fonts") : join(process.env.XDG_DATA_HOME ?? join(context.host.home, ".local/share"), "fonts", `GeistMono-${metadata.tag_name}`);
+    const target = context.host.platform === "darwin" ? join(context.host.home, "Library/Fonts") : join(process.env.XDG_DATA_HOME ?? join(context.host.home, ".local/share"), "fonts", `GeistMono-v${pin.version}`);
     await mkdir(target, { recursive: true });
     const changes: Array<{ source: string; destination: string; existing: boolean; backup?: string }> = [];
     for (const face of faces) {

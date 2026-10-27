@@ -1,7 +1,13 @@
 providers:
+  anthropic:
+    # Built-in provider: override only the Haiku 5.5 window. Pricing is unchanged,
+    # so prompts above 100k input tokens still bill at the long-context rate.
+    modelOverrides:
+      claude-haiku-5-5:
+        contextWindow: 1000000
   anthropic-api:
-    # Replace the placeholder with your 1Password secret reference.
-    apiKey: "!op read \"op://Personal/OMP ANTHROPIC/password\" --no-newline"
+    # Resolved at runtime by op with the scoped OMP service account.
+    apiKey: "!op read \"op://OMP/OMP ANTHROPIC/password\" --no-newline"
     api: anthropic-messages
     baseUrl: https://api.anthropic.com
     models:
@@ -58,8 +64,8 @@ providers:
           cacheRead: 0.10
           cacheWrite: 1.25
   openai-api:
-    # Replace the placeholder with your 1Password secret reference.
-    apiKey: "!op read \"op://Personal/OMP OPENAI/password\" --no-newline"
+    # Resolved at runtime by op with the scoped OMP service account.
+    apiKey: "!op read \"op://OMP/OMP OPENAI/password\" --no-newline"
     api: openai-responses
     baseUrl: https://api.openai.com/v1
     models:
@@ -131,29 +137,8 @@ providers:
           output: 1.20
           cacheRead: 0.02
           cacheWrite: 0.25
-  camel-stream:
-    apiKey: "!op read \"op://Personal/CamelStream API Key/password\" --no-newline"
-    api: openai-completions
-    baseUrl: https://stream.camelai.com/v1
-    models:
-      - id: auto
-        name: "Auto"
-        contextWindow: 262144
-  mwapi:
-    apiKey: "!op read \"op://Personal/MWAPI API Key/password\" --no-newline"
-    api: anthropic-messages
-    baseUrl: https://api.mwapi.dev/v1
-    models:
-      - id: claude-opus-5
-        name: "Claude Opus 5 (MWAPI)"
-        input:
-          - text
-      - id: claude-sonnet-5
-        name: "Claude Sonnet 5 (MWAPI)"
-        input:
-          - text
   openrouter:
-    apiKey: "!op read \"op://Personal/OpenRouter API Key - omp/credential\" --no-newline"
+    apiKey: "!op read \"op://OMP/OpenRouter API Key - omp/credential\" --no-newline"
     api: openai-completions
     baseUrl: https://openrouter.ai/api/v1
     models:

@@ -3,15 +3,15 @@ import { access, lstat } from "node:fs/promises";
 import { BoxRenderable, TextRenderable, createCliRenderer } from "@opentui/core";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { catalog, configurationLinks, configurationPrerequisites, desktopOnly, retiredConfigurationLinks, runAfter } from "./domain/catalog";
+import { catalog, configurationLinks, configurationPrerequisites, desktopOnly, retiredConfigurationLinks, runAfter, systemConfigurationFiles } from "./domain/catalog";
 import { initialSelection, reduceSelection } from "./domain/selection";
 import type { ComponentAvailability, ComponentId, ComponentResult } from "./domain/model";
-import { UserFileLinks, assertOmpAgentDirectoryIsReal, migrateGitIdentity, migrateZshLocal, scanBackupForCredentials } from "./infrastructure/links";
+import { UserFileLinks, assertOmpAgentDirectoryIsReal, migrateZshLocal, scanBackupForCredentials } from "./infrastructure/links";
 import { inspectHost } from "./infrastructure/host";
 import { inspectPackage, installRecipe, packageSudoRoutes } from "./infrastructure/packages";
 import type { SoftwareState } from "./infrastructure/packages";
 import { amphetamineApp, appIds, appSudoRoutes, inspectApp, installApp, opSshSignPath } from "./infrastructure/apps";
-import { configureGitSigning, currentSigningMethod, ensureGhAuth, gitConfigTarget, signingItems, signingKeyPath } from "./infrastructure/github";
+import { configureGitDefaults, configureGitSigning, currentSigningMethod, ensureGhAuth, gitConfigTarget, signingItems, signingKeyPath } from "./infrastructure/github";
 import { ensureOpSession } from "./infrastructure/onepassword";
 import { configureJavaHome, inspectRuntime, installRuntime, runtimeIds, runtimeSudoRoutes } from "./infrastructure/runtimes";
 import { configureXcode, inspectXcode } from "./infrastructure/xcode";
@@ -178,13 +178,15 @@ for (const id of executionOrder) {
       const paths = configurationLinks[id];
       const retired = (retiredConfigurationLinks[id] ?? []).map(([source,target]) => `remove ${target} if it links to ${source}`);
       if (paths) console.log(`${id}: ${[...paths.map(([source,target]) => `link ${source} -> ${target}`), ...retired].join(", ")}`);
+      else if (id === "git-config") console.log(`${id}: make ~/.gitconfig a private wrapper that includes git/.gitconfig first and ~/.gitconfig.local last; a legacy symlink's identity moves into ~/.gitconfig.local`);
+      else if (id === "keyd-config") console.log(`${id}: publish root-owned copies of ${(systemConfigurationFiles["keyd-config"] ?? []).map(([source]) => source).join(", ")} into /etc/keyd (backups kept; unrelated or edited files left untouched); rerun after editing the checkout`);
       else if (id === "macos-defaults") console.log(`${id}: where different, ${macDefaults.map(setting => `defaults ${macDefaultWriteArgs(setting).join(" ")}`).join("; ")}`);
       else if (id === "amphetamine-config") console.log(`${id}: where different, ${(await amphetamineSettings(recipeContext)).map(setting => `defaults ${macDefaultWriteArgs(setting).join(" ")}`).join("; ")}; add ${amphetamineApp} to login items; start a session`);
       else if (id === "xcode") console.log(`${id}: verify full Xcode selection, license, first-launch components, and macOS SDK; offer App Store installation and repair only when needed`);
       else if (id === "java-home") console.log(`${id}: install the managed zsh login snippet; resolve and verify Corretto 21 JAVA_HOME and put its bin first on PATH`);
       else if (id === "github-tools" || id === "github-tools-cron") {
         const plan = await commands.run(githubToolsScript(root), id === "github-tools" ? ["list"] : ["cron", "show"], { quiet: true });
-        console.log(`${id}: ${id === "github-tools" ? "sync" : "crontab entry"}\n${plan.stdout.trimEnd().replace(/^/gm, "  ")}`);
+        console.log(`${id}: ${id === "github-tools" ? "sync (only signed-and-enrolled commits are built or linked)" : "crontab entry"}\n${plan.stdout.trimEnd().replace(/^/gm, "  ")}`);
       }
       else if (id === "1password-signin") console.log(`${id}: install op when missing; check op vault access; otherwise enable the app's CLI integration, or op account add + op signin (interactive)`);
       else if (id === "gh-auth") console.log(`${id}: check gh auth status; otherwise gh auth login --web with the admin:ssh_signing_key and write:gpg_key scopes (interactive)`);
@@ -211,14 +213,6 @@ for (const id of executionOrder) {
       const messages: string[] = [];
       for (const [source, destination] of retiredConfigurationLinks[id] ?? []) if (await fileLinks.removeRetiredLink(join(root, source), join(home, destination)) === "changed") messages.push(`removed ${destination}`);
       for (const [source, destination] of links) if (await fileLinks.ensureLink(join(root, source), join(home, destination)) === "changed") messages.push(destination);
-      if (id === "git-config" && fileLinks.backupDirectory) {
-        const backup = join(fileLinks.backupDirectory, ".gitconfig");
-        if (await lstat(backup).then(() => true).catch(() => false)) {
-          const migration = await migrateGitIdentity(backup, home);
-          if (migration.migrated) attentionNotes.push("Migrated prior Git identity/signing settings to ~/.gitconfig.local; review the file.");
-          if (migration.conflict) attentionNotes.push("Prior Git identity data remains in the backup because ~/.gitconfig.local already exists.");
-        }
-      }
       if (id === "zsh-config" && fileLinks.backupDirectory) {
         const backup = join(fileLinks.backupDirectory, ".config/zsh");
         if (await lstat(backup).then(() => true).catch(() => false)) {
@@ -252,7 +246,7 @@ for (const id of executionOrder) {
     else if (id === "aerospace" && softwareStates.get(id)?.route === "aerospace-source") outcome = await installAerospaceSource(recipeContext);
     else if (id === "keyd" && softwareStates.get(id)?.route === "keyd-source-build" && !sudoAvailable) outcome = { id, status: "blocked", attention: ["Elevation was declined or unavailable; rerun the keyd build with sudo."] };
     else if (id === "keyd" && softwareStates.get(id)?.route === "keyd-source-build") outcome = await installKeydFromSource(recipeContext);
-    else if (id === "keyd-config" && !sudoAvailable) outcome = { id, status: "blocked", attention: ["Elevation was declined or unavailable; manually install the selected /etc/keyd links with sudo."] };
+    else if (id === "keyd-config" && !sudoAvailable) outcome = { id, status: "blocked", attention: ["Elevation was declined or unavailable; manually publish the selected root-owned /etc/keyd copies with sudo."] };
     else if (id === "keyd-config") outcome = await installKeyd(recipeContext);
     else if (id === "gnome-apply") outcome = await applyGnome(recipeContext);
     else if (id === "macos-defaults") outcome = await applyMacDefaults(recipeContext);
@@ -265,6 +259,7 @@ for (const id of executionOrder) {
     }
     else if (id === "gh-auth") outcome = await ensureGhAuth(recipeContext);
     else if (id === "git-signing") outcome = await configureGitSigning(recipeContext);
+    else if (id === "git-config") outcome = await configureGitDefaults(recipeContext, fileLinks);
     else {
       if ((sudoRoutes.has(softwareStates.get(id)?.route ?? "") || id === "linux-desktop" || id === "keyd") && !sudoAvailable) outcome = { id, status:"blocked", attention:["Elevation was declined or unavailable; rerun the exact package command with sudo."] };
       else {

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, readFile, readlink, lstat, rm, symlink, writeFile, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
-import { assertOmpAgentDirectoryIsReal, migrateGitIdentity, migrateZshLocal, UserFileLinks } from "./links";
+import { assertOmpAgentDirectoryIsReal, migrateZshLocal, UserFileLinks } from "./links";
 let root: string;
 let home: string;
 let source: string;
@@ -99,32 +99,17 @@ describe("UserFileLinks", () => {
     expect(await readlink(local)).toBe("missing");
     expect(await readFile(backed, "utf8")).toContain("preserved");
   });
-  test("migrates backed-up git and zsh local files with private permissions", async () => {
+  test("migrates a backed-up zsh local file with private permissions", async () => {
     const links = new UserFileLinks({ home });
-    const git = join(home, ".gitconfig");
-    await writeFile(git, "identity");
-    const gitBackup = await links.backup(git);
-    expect(await migrateGitIdentity(gitBackup, home)).toEqual({ migrated: true, conflict: false });
-    expect(await readFile(join(home, ".gitconfig.local"), "utf8")).toBe("identity");
-    expect((await lstat(join(home, ".gitconfig.local"))).mode & 0o777).toBe(0o600);
-
-    const zshBackup = join(links.backupDirectory!, ".config", "zsh");
-    await mkdir(zshBackup, { recursive: true });
-    await writeFile(join(zshBackup, "local.zsh"), "local secret");
+    const zsh = join(home, ".config", "zsh", "local.zsh");
+    await mkdir(join(home, ".config", "zsh"), { recursive: true });
+    await writeFile(zsh, "local secret");
+    await links.backup(zsh);
     const repository = join(root, "repository");
     expect(await migrateZshLocal(links.backupDirectory!, repository)).toEqual({ migrated: true, conflict: false });
     const migrated = join(repository, "zsh", ".config", "zsh", "local.zsh");
     expect(await readFile(migrated, "utf8")).toBe("local secret");
     expect((await lstat(migrated)).mode & 0o777).toBe(0o600);
-  });
-
-  test("reports migration conflicts without replacing existing local state", async () => {
-    const links = new UserFileLinks({ home });
-    const backup = join(home, "old.gitconfig");
-    await writeFile(backup, "old identity");
-    await writeFile(join(home, ".gitconfig.local"), "new identity");
-    expect(await migrateGitIdentity(backup, home)).toEqual({ migrated: false, conflict: true });
-    expect(await readFile(join(home, ".gitconfig.local"), "utf8")).toBe("new identity");
   });
 
 

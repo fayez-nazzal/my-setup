@@ -31,7 +31,7 @@ Most configs are symlinked, so editing this repo changes your machine.
   for System Events/Amphetamine, app-data access or Full Disk Access for
   Amphetamine preferences, and Accessibility for AeroSpace. Denial blocks
   that operation. Some grants require restarting the terminal and retrying.
-- **Debian/Ubuntu:** amd64 and arm64 use signed official downloads and APT.
+- **Debian/Ubuntu:** amd64 and arm64 use signed APT repositories, signature-checked vendor downloads, and SHA-256-pinned release archives (`installer/domain/download-pins.ts`).
   Headless systems skip desktop-only choices but retain shell and developer tools.
 
 1Password and its CLI are installed before integration and sign-in dialogs.
@@ -59,19 +59,25 @@ Account dialogs happen before long builds.
   OpenRouter models are selectable with
   `omp --model openrouter/google/gemini-4-argon` or
   `omp --model openrouter/deepseek/deepseek-v4.1-flash-1017`; their API key is
-  read at runtime from `op://Personal/OpenRouter API Key - omp/credential`
-  (requires signed-in 1Password CLI). Existing model-role assignments are
+  read at runtime from `op://OMP/OpenRouter API Key - omp/credential` through
+  the scoped OMP service account ([Shell](zsh/README.md#omp-credentials)). Existing model-role assignments are
   unchanged. `~/.omp/agent/models.yml` links to `.omp/agent/models.yml` here.
+  If all vault keys fail or Keychain no longer prompts, run
+  `zsh ~/my-setup/bin/omp-setup-credentials` in your terminal on macOS.
+  It creates and verifies a scoped replacement token, backs up the old
+  Keychain value, and resets trusted applications. OMP refuses to launch
+  with a token that cannot authenticate.
 - **Excalidraw+ MCP:** OMP uses `.omp/agent/mcp.json`, linked on this machine
   to `~/.omp/agent/mcp.json`. Claude Code has a user-scoped `excalidraw`
   server in `~/.claude.json`. Both connect to
   `https://api.excalidraw.com/api/v1/mcp` and read
-  `op://Personal/OMP EXCALIDRAW/password` at runtime (signed-in `op` required).
+  `op://OMP/OMP EXCALIDRAW/password` at runtime via the scoped OMP service account.
   OMP uses a `!command` Authorization header; Claude uses `headersHelper`
   with `op` and `jq`. Neither configuration stores the key. On a fresh
   machine, link the MCP file and register Claude's server separately;
   the installer does not configure Claude Code. Restart clients after changes.
-  Verify Claude with `claude mcp get excalidraw`.
+  Verify Claude with `claude mcp get excalidraw`. Its helper uses your personal
+  `op` sign-in, not the scoped OMP token; this repo does not change it.
 
 ## Details
 

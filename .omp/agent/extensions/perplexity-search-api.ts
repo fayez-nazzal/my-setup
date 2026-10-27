@@ -46,7 +46,7 @@ export default function perplexitySearchApi(pi: ExtensionAPI) {
     name: "web_search",
     label: "Web Search (Perplexity)",
     description:
-      "Search the web through Perplexity's direct Search API and return ranked sources. Uses the 1Password-backed Perplexity Web Search key.",
+      "Search the web through Perplexity's direct Search API and return ranked sources. Uses the PERPLEXITY_API_KEY supplied by the omp launcher.",
     parameters: z.object({
       query: z.string(),
       recency: z.enum(["day", "week", "month", "year"]).optional(),
@@ -56,21 +56,16 @@ export default function perplexitySearchApi(pi: ExtensionAPI) {
       num_search_results: z.number().optional(),
     }),
     async execute(_toolCallId, params: SearchParams, signal) {
-      const key = await pi.exec(
-        "op",
-        ["read", "op://Personal/Perplexity Web Search/password", "--no-newline"],
-        { signal },
-      );
-      const apiKey = key.stdout.trim();
-      if (key.code !== 0 || !apiKey) {
+      const apiKey = process.env.PERPLEXITY_API_KEY?.trim();
+      if (!apiKey) {
         return {
           content: [
             {
               type: "text",
-              text: "Error: could not resolve the Perplexity Web Search key from 1Password.",
+              text: "Error: PERPLEXITY_API_KEY is unavailable; launch OMP with the scoped credential wrapper.",
             },
           ],
-          details: { response: { provider: "perplexity" }, error: key.stderr.trim() },
+          details: { response: { provider: "perplexity" }, error: "PERPLEXITY_API_KEY is unavailable" },
         };
       }
 

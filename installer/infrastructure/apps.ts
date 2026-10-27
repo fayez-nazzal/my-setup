@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { access, chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -6,6 +5,7 @@ import { basename, dirname, join } from "node:path";
 import type { CommandResult, PackageContext, SoftwareState } from "./packages";
 import { aptInstalled, brewCaskEnabled, brewInstalled, brewPackageCommand, healthyState, installApt, latestGithubRelease, placeUserExecutable } from "./packages";
 import type { Platform } from "./host";
+import { downloadVerified } from "./downloads";
 
 /** Apps with their own inspect/install routes per OS and CPU (the rest of the software list lives in packages.ts). */
 export const appIds: ReadonlySet<string> = new Set(["1password", "1password-cli", "obsidian", "gh", "google-chrome", "orbstack", "amphetamine"]);
@@ -85,11 +85,6 @@ async function githubAsset(c: PackageContext, repository: string, tag: string, n
   if (!url) throw new Error(`${repository} ${tag} has no ${name} asset.`);
   if (!digest?.startsWith("sha256:")) throw new Error(`${repository} ${tag} publishes no SHA-256 digest for ${name}.`);
   return { url, digest: digest.slice("sha256:".length) };
-}
-async function downloadVerified(c: PackageContext, asset: GithubAsset, destination: string): Promise<void> {
-  await download(c, asset.url, destination);
-  const actual = createHash("sha256").update(await readFile(destination)).digest("hex");
-  if (actual !== asset.digest) throw new Error(`${basename(destination)} failed its SHA-256 check.`);
 }
 async function findDirectoryWith(root: string, file: string): Promise<string> {
   for (const entry of await readdir(root, { withFileTypes: true })) {

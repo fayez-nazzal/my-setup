@@ -8,7 +8,7 @@ export const catalog: readonly ComponentDefinition[] = [
   { id: "xcode", label: "Full Xcode setup", description: "Verify full Xcode, developer selection, license, first-launch components, and the macOS SDK before macOS tools.", group: "Prerequisites", platforms: mac, requires: [] },
   { id: "zsh-config", label: "zsh configuration", description: "Link zsh files; existing files are backed up before replacement.", group: "Configuration", platforms: both, requires: [] },
   { id: "java-home", label: "Corretto 21 JAVA_HOME", description: "Set JAVA_HOME and Java's PATH in the managed zsh login environment; verify the selected Corretto JDK.", group: "Configuration", platforms: both, requires: ["corretto21", "zsh-config"] },
-  { id: "git-config", label: "git configuration", description: "Link portable Git defaults and preserve local identity/signing data.", group: "Configuration", platforms: both, requires: [] },
+  { id: "git-config", label: "git configuration", description: "Set up a private ~/.gitconfig from the portable Git defaults in git/.gitconfig; your identity, credentials, and local overrides stay in ~/.gitconfig and ~/.gitconfig.local.", group: "Configuration", platforms: both, requires: [] },
   { id: "tmux-config", label: "tmux configuration", description: "Link tmux configuration with collision-safe backups.", group: "Configuration", platforms: both, requires: [] },
   { id: "omp-config", label: "OMP configuration", description: "Link selected OMP configuration only; keep databases, sessions, and cache in place.", group: "Configuration", platforms: both, requires: [] },
   { id: "tmuxscope-config", label: "tmuxscope configuration", description: "Link tmuxscope project scopes with a collision-safe backup.", group: "Configuration", platforms: both, requires: [] },
@@ -17,13 +17,13 @@ export const catalog: readonly ComponentDefinition[] = [
   { id: "aerospace-config", label: "AeroSpace configuration", description: "Link AeroSpace configuration and its Alacritty focus-or-launch helper.", group: "OS configuration", platforms: mac, requires: [] },
   { id: "amphetamine-config", label: "Amphetamine configuration", description: "Keep the Mac awake: apply amphetamine/amphetamine.plist (session at launch and on wake, no Dock icon), open Amphetamine at login, and start a session.", group: "OS configuration", platforms: mac, requires: [] },
   { id: "gnome-config", label: "GNOME configuration", description: "Link GNOME settings and helper; this does not apply settings.", group: "OS configuration", platforms: linux, requires: [] },
-  { id: "keyd-config", label: "keyd configuration", description: "Install system key remapping links; conflicting root-owned files are left untouched.", group: "OS configuration", platforms: linux, requires: [] },
+  { id: "keyd-config", label: "keyd configuration", description: "Publish root-owned copies of the keyd configs to /etc/keyd; rerun after editing them; conflicting files are left untouched.", group: "OS configuration", platforms: linux, requires: [] },
   { id: "zsh", label: "zsh", description: "Install zsh when missing; upgrade it when Homebrew reports it outdated.", group: "Software", platforms: both, requires: [] },
   { id: "git", label: "git", description: "Install Git when missing; upgrade it when Homebrew reports it outdated.", group: "Software", platforms: both, requires: [] },
   { id: "tmux", label: "tmux", description: "Install tmux when missing; upgrade it when Homebrew reports it outdated.", group: "Software", platforms: both, requires: [] },
   { id: "tmux-plugins", label: "tmux plugins", description: "Install missing TPM plugins using an isolated tmux server.", group: "Software", platforms: both, requires: ["git", "tmux"] },
-  { id: "github-tools", label: "GitHub tools (~/tools)", description: "Clone, fast-forward, build, and link the tools listed in tools/tools.conf (tmuxscope, browsershot, termshot, nag, next-step, chrome-domain-tab-saver).", group: "Software", platforms: both, requires: ["git"] },
-  { id: "github-tools-cron", label: "GitHub tools auto-update", description: "Install the crontab entry that pulls and rebuilds changed GitHub tools twice a day; installs cron on Linux when missing.", group: "Software", platforms: both, requires: ["github-tools"] },
+  { id: "github-tools", label: "GitHub tools (~/tools)", description: "Clone, fast-forward, build, and link the tools listed in tools/tools.conf (tmuxscope, browsershot, termshot, nag, next-step, chrome-domain-tab-saver); only commits signed by an enrolled owner key are built or linked.", group: "Software", platforms: both, requires: ["git"] },
+  { id: "github-tools-cron", label: "GitHub tools auto-update", description: "Install the crontab entry that pulls, verifies signatures, and rebuilds changed GitHub tools twice a day; installs cron on Linux when missing.", group: "Software", platforms: both, requires: ["github-tools"] },
   { id: "zsh-abbr", label: "zsh-abbr", description: "Install through supported Homebrew or source checkout routes.", group: "Software", platforms: both, requires: ["git"] },
   { id: "starship", label: "starship", description: "Install Starship only when no healthy executable is available.", group: "Software", platforms: both, requires: [] },
   { id: "zoxide", label: "zoxide", description: "Install zoxide only when no healthy executable is available.", group: "Software", platforms: both, requires: [] },
@@ -33,8 +33,8 @@ export const catalog: readonly ComponentDefinition[] = [
   { id: "fd", label: "fd", description: "Install fd or recognize Debian's fdfind alias.", group: "Software", platforms: both, requires: [] },
   { id: "ripgrep", label: "ripgrep", description: "Install ripgrep (rg) only when no healthy executable is available.", group: "Software", platforms: both, requires: [] },
   { id: "thefuck", label: "thefuck", description: "Install thefuck only when no healthy executable is available.", group: "Software", platforms: both, requires: [] },
-  { id: "killport", label: "killport", description: "Install killport (free a port by killing its processes) via Homebrew, APT, or its latest Linux release archive.", group: "Software", platforms: both, requires: [] },
-  { id: "volta", label: "Volta", description: "Install the Volta toolchain manager into ~/.volta without editing shell startup files (zsh config already exports it).", group: "Software", platforms: both, requires: [] },
+  { id: "killport", label: "killport", description: "Install killport (free a port by killing its processes) via Homebrew, APT, or its pinned, digest-checked Linux release archive.", group: "Software", platforms: both, requires: [] },
+  { id: "volta", label: "Volta", description: "Install the pinned, digest-checked Volta toolchain manager into ~/.volta (or $VOLTA_HOME) without running Volta setup or editing shell startup files (zsh config already exports it).", group: "Software", platforms: both, requires: [] },
   { id: "node-lts", label: "Node LTS (via Volta)", description: "Run `volta install node` to download the latest Node LTS as the default runtime.", group: "Software", platforms: both, requires: ["volta"] },
   { id: "aws-cli", label: "AWS CLI v2", description: "Install and verify AWS CLI v2 for this OS and CPU; AWS credentials remain machine-local.", group: "Software", platforms: both, requires: [] },
   { id: "corretto21", label: "Amazon Corretto 21", description: "Install Amazon's Corretto JDK 21; verify both the Java version and Corretto vendor.", group: "Software", platforms: both, requires: [] },
@@ -52,14 +52,13 @@ export const catalog: readonly ComponentDefinition[] = [
   { id: "orbstack", label: "OrbStack", description: "Install OrbStack (Docker and Linux machines) with the Homebrew cask.", group: "OS software/state", platforms: mac, requires: [] },
   { id: "amphetamine", label: "Amphetamine", description: "Install Amphetamine from the App Store with Homebrew's mas; sign in to the App Store first.", group: "OS software/state", platforms: mac, requires: [] },
   { id: "linux-desktop", label: "Linux desktop bundle", description: "Install this setup's APT audio/network/rofi bundle; not a generic Linux desktop stack.", group: "OS software/state", platforms: linux, requires: [] },
-  { id: "keyd", label: "keyd", description: "Install keyd through supported APT or stable upstream source routes.", group: "OS software/state", platforms: linux, requires: [] },
+  { id: "keyd", label: "keyd", description: "Install keyd through a supported APT package or the pinned upstream v2.6.0 source build.", group: "OS software/state", platforms: linux, requires: [] },
   { id: "gnome-apply", label: "Apply GNOME settings", description: "Apply managed dconf values only when they differ from the current session.", group: "OS software/state", platforms: linux, requires: [] },
   { id: "macos-defaults", label: "Apply AeroSpace macOS settings", description: "Write AeroSpace's recommended macOS defaults and the auto-hidden, unanimated Dock; only differing values change.", group: "OS software/state", platforms: mac, requires: [] },
 ];
 
 export const configurationLinks: Partial<Record<ComponentId, readonly [string, string][]>> = {
   "zsh-config": [["zsh/.zshenv", ".zshenv"], ["zsh/.zprofile", ".zprofile"], ["zsh/.zshrc", ".zshrc"], ["zsh/.config/zsh", ".config/zsh"]],
-  "git-config": [["git/.gitconfig", ".gitconfig"]],
   "tmux-config": [[".tmux.conf", ".tmux.conf"]],
   "omp-config": [[".omp/agent/config.yml", ".omp/agent/config.yml"], [".omp/agent/models.yml", ".omp/agent/models.yml"], [".omp/agent/mcp.json", ".omp/agent/mcp.json"], [".omp/agent/extensions", ".omp/agent/extensions"], [".omp/agent/skills", ".omp/agent/skills"], [".omp/agent/agents/writer.md", ".omp/agent/agents/writer.md"], ["bin/omp-hide-aws-skills", ".local/bin/omp-hide-aws-skills"]],
   "tmuxscope-config": [["tmux/tmux-scopes.conf", ".config/tmux-scopes.conf"]],
@@ -74,7 +73,7 @@ export const retiredConfigurationLinks: Partial<Record<ComponentId, readonly [st
   "alacritty-config": [["bin/alacritty", ".local/bin/alacritty"]],
 };
 
-export const systemConfigurationLinks: Partial<Record<ComponentId, readonly [string, string][]>> = {
+export const systemConfigurationFiles: Partial<Record<ComponentId, readonly [string, string][]>> = {
   "keyd-config": [["keyd/default.conf", "/etc/keyd/default.conf"], ["keyd/apple-magic-keyboard.conf", "/etc/keyd/apple-magic-keyboard.conf"]],
 };
 
