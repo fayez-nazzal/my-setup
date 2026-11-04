@@ -39,6 +39,38 @@ launches activate Alacritty using `open -a`, without an Automation grant. On Lin
 without killing a window; explicit `-e` commands are never closed by this
 guard.
 
+## Appearance
+
+`themes/dark.toml` and `themes/light.toml` hold the palettes. `theme-sync.sh`
+writes the one matching the system appearance to
+`~/.config/alacritty/theme.toml`, a generated and untracked file that
+`alacritty.toml` imports. Alacritty live-reloads the import, so open windows
+change too. The primary and selection colors match tmux's palettes, so both
+follow the same light/dark choice.
+
+- **macOS:** dark when `AppleInterfaceStyle` is `Dark`. The LaunchAgent
+  `com.my-setup.alacritty-theme` runs `apply` when
+  `~/Library/Preferences/.GlobalPreferences.plist` changes and every 30
+  seconds. `cfprefsd` flushes that file asynchronously, so the interval
+  catches writes that WatchPaths misses. An unchanged palette is a no-op.
+- **GNOME:** the user service `my-setup-alacritty-theme.service` runs
+  `theme-sync.sh watch`, which applies on each `gsettings monitor
+  org.gnome.desktop.interface` event without polling. `color-scheme`
+  `prefer-dark` selects dark and `prefer-light` selects light. When it is
+  `default`, the GTK theme name decides: dark if it contains "dark", light
+  otherwise. Missing `gsettings` means light. tmux uses the same detection.
+- Alacritty leaves `decorations_theme_variant` unset, so the macOS titlebar
+  also follows the system.
+
+`theme-sync.sh current` prints the mode it would apply. Remove the services
+with `launchctl bootout "gui/$(id -u)/com.my-setup.alacritty-theme"` and
+`rm ~/Library/LaunchAgents/com.my-setup.alacritty-theme.plist` on macOS, or
+`systemctl --user disable --now my-setup-alacritty-theme.service` on Linux.
+
+`install.sh` installs the appropriate user service when **Alacritty
+configuration** is selected. It reports an attention note if registration
+fails. The sync refuses to overwrite an unmanaged theme file or service.
+
 ## Install
 
 Select **Alacritty configuration** in `./install.sh`. It links the settings
@@ -53,6 +85,7 @@ By hand:
 mkdir -p "$HOME/.config/alacritty" "$HOME/.local/bin"
 ln -sfn "$HOME/my-setup/alacritty/alacritty.toml" "$HOME/.config/alacritty/alacritty.toml"
 ln -sfn "$HOME/my-setup/bin/my-setup-alacritty-shell" "$HOME/.local/bin/my-setup-alacritty-shell"
+sh "$HOME/my-setup/alacritty/theme-sync.sh" install
 ```
 
 Requires:
@@ -77,3 +110,6 @@ Requires:
   for Cmd+C/Cmd+V — without keyd, those bindings are simply unreachable
   from a physical keyboard (harmless, not an error) and normal
   Ctrl+Shift+C/V still work for copy/paste.
+- **`gsettings` and a systemd user session** on GNOME, for the appearance
+  service `theme-sync.sh install` registers. The service needs the desktop
+  D-Bus session that `gsettings monitor` reads from.

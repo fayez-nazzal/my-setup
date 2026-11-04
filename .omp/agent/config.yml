@@ -3,8 +3,8 @@ composer:
   shape: box
   tokenRate: true
 theme:
-  dark: dark-dracula
-  light: light-cyberpunk
+  dark: dark-dracula-hc
+  light: light-cyberpunk-hc
 setupVersion: 2
 colorBlindMode: false
 statusLine:

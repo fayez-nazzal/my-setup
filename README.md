@@ -67,6 +67,14 @@ Account dialogs happen before long builds.
   It creates and verifies a scoped replacement token, backs up the old
   Keychain value, and resets trusted applications. OMP refuses to launch
   with a token that cannot authenticate.
+- **OMP theme:** The installer links the two high-contrast themes and the
+  `system-theme` extension. The extension watches Alacritty's generated
+  appearance file and switches running interactive OMP sessions after it
+  changes; restart OMP once to load it. Without that file, OMP uses its
+  configured dark/light automatic detection instead. See
+  [`alacritty/README.md`](alacritty/README.md) for the system appearance
+  service. The custom palettes improve default text, status and syntax
+  contrast; application-supplied colors can still override them.
 - **Excalidraw+ MCP:** OMP uses `.omp/agent/mcp.json`, linked on this machine
   to `~/.omp/agent/mcp.json`. Claude Code has a user-scoped `excalidraw`
   server in `~/.claude.json`. Both connect to
