@@ -19,7 +19,8 @@ configuration changes:
 
 Correct installs are skipped. Replaced user files are backed up to
 `~/.dotfiles-backup-*`. Unfinished steps appear under **Needs your attention**.
-Most configs are symlinked, so editing this repo changes your machine.
+Most configs are symlinked, so editing this repo changes your machine. Run
+`~/my-setup/install.sh --help` for the accepted flags.
 
 ## Platforms and prerequisites
 
@@ -31,8 +32,10 @@ Most configs are symlinked, so editing this repo changes your machine.
   for System Events/Amphetamine, app-data access or Full Disk Access for
   Amphetamine preferences, and Accessibility for AeroSpace. Denial blocks
   that operation. Some grants require restarting the terminal and retrying.
-- **Debian/Ubuntu:** amd64 and arm64 use signed APT repositories, signature-checked vendor downloads, and SHA-256-pinned release archives (`installer/domain/download-pins.ts`).
-  Headless systems skip desktop-only choices but retain shell and developer tools.
+- **Debian/Ubuntu:** amd64 and arm64 use signed APT repositories,
+  signature-checked vendor downloads, and SHA-256-pinned release archives
+  (`installer/domain/download-pins.ts`). Headless systems skip desktop-only
+  choices but retain shell and developer tools.
 
 1Password and its CLI are installed before integration and sign-in dialogs.
 Account dialogs happen before long builds.
@@ -47,7 +50,8 @@ Account dialogs happen before long builds.
 - **Terminal:** Alacritty settles on one default window sharing a marked tmux
   session, even after tmuxscope renames it. Explicit `alacritty -e CMD` windows
   stay independent. Existing windows keep their shells; finish their work and
-  close them before adopting this policy. The installer does not close your work.
+  close them before adopting this policy. The installer does not close your
+  work.
 - **Signing and secrets:** Setup signs into 1Password, then GitHub, preserves
   or selects GPG/SSH signing, and verifies a temporary signed commit.
   See [Git](git/README.md) for required 1Password items. Identity and secrets
@@ -60,8 +64,10 @@ Account dialogs happen before long builds.
   `omp --model openrouter/google/gemini-4-argon` or
   `omp --model openrouter/deepseek/deepseek-v4.1-flash-1017`; their API key is
   read at runtime from `op://OMP/OpenRouter API Key - omp/credential` through
-  the scoped OMP service account ([Shell](zsh/README.md#omp-credentials)). Existing model-role assignments are
-  unchanged. `~/.omp/agent/models.yml` links to `.omp/agent/models.yml` here.
+  the scoped OMP service account
+  ([Shell](zsh/README.md#omp-credentials)). Existing model-role assignments
+  are unchanged. `~/.omp/agent/models.yml` links to `.omp/agent/models.yml`
+  here.
   If all vault keys fail or Keychain no longer prompts, run
   `zsh ~/my-setup/bin/omp-setup-credentials` in your terminal on macOS.
   It creates and verifies a scoped replacement token, backs up the old
@@ -79,7 +85,8 @@ Account dialogs happen before long builds.
   to `~/.omp/agent/mcp.json`. Claude Code has a user-scoped `excalidraw`
   server in `~/.claude.json`. Both connect to
   `https://api.excalidraw.com/api/v1/mcp` and read
-  `op://OMP/OMP EXCALIDRAW/password` at runtime via the scoped OMP service account.
+  `op://OMP/OMP EXCALIDRAW/password` at runtime via the scoped OMP service
+  account.
   OMP uses a `!command` Authorization header; Claude uses `headersHelper`
   with `op` and `jq`. Neither configuration stores the key. On a fresh
   machine, link the MCP file and register Claude's server separately;
