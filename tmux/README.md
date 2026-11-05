@@ -85,6 +85,6 @@ Without either helper, all core bindings and plugin behavior remain available.
 
 ## Portability notes
 
-- macOS dark-mode detection uses `defaults` only on Darwin. Linux defaults to the dark palette; macOS follows system dark mode and otherwise uses the light palette. `TMUX_THEME=dark` forces dark on either platform.
+- `tmux/theme.sh` checks macOS appearance or GNOME's color-scheme (falling back to the GTK theme) at startup and every five seconds while a status line is visible. It updates the ukiyo palette and pane borders without restarting the server. On other desktops, set a GNOME color-scheme or use a supported terminal's own appearance integration; unknown platforms default to dark. The configuration requires `realpath`.
 - TPM and tmuxscope are guarded. A missing installation does not abort config loading.
 - `Ctrl-a |` and `Ctrl-a -` split panes in the current working directory. `Ctrl-a N` creates a named session, and `Ctrl-a s` opens sessionx.

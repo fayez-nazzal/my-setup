@@ -3,8 +3,8 @@ composer:
   shape: field
   tokenRate: true
 theme:
-  dark: light-honeycomb
-  light: light-cyberpunk
+  dark: dark-dracula-hc
+  light: light-cyberpunk-hc
 setupVersion: 2
 colorBlindMode: false
 statusLine:

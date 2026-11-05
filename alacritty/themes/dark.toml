@@ -1,0 +1,33 @@
+# Dark palette selected by theme-sync.sh when the system appearance is dark.
+# Primary and selection colors match tmux's dark (onedark/deep) chrome.
+[colors.primary]
+background = "#282c34"
+foreground = "#f5f5f5"
+
+[colors.cursor]
+text = "#282c34"
+cursor = "#f5f5f5"
+
+[colors.selection]
+text = "#f5f5f5"
+background = "#3b4252"
+
+[colors.normal]
+black = "#9aa2b1"
+red = "#e97881"
+green = "#98c379"
+yellow = "#e5c07b"
+blue = "#61afef"
+magenta = "#c678dd"
+cyan = "#56b6c2"
+white = "#abb2bf"
+
+[colors.bright]
+black = "#9aa2b1"
+red = "#e97881"
+green = "#98c379"
+yellow = "#e5c07b"
+blue = "#61afef"
+magenta = "#c678dd"
+cyan = "#56b6c2"
+white = "#ffffff"

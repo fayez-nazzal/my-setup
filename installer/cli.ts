@@ -228,6 +228,8 @@ for (const id of executionOrder) {
         }
       }
       if (id === "alacritty-config") {
+        const themeSync = await commands.run("/bin/sh", [join(root, "alacritty/theme-sync.sh"), "install"]);
+        if (themeSync.code !== 0) attentionNotes.push("Alacritty appearance synchronization could not be installed; run alacritty/theme-sync.sh install in a graphical session.");
         const alacritty = recipeContext.host.executables.get("alacritty");
         const version = alacritty ? /alacritty\s+(\d+)\.(\d+)/.exec((await commands.run(alacritty, ["--version"], { quiet: true })).stdout) : null;
         if (version && Number(version[1]) === 0 && Number(version[2]) < 14) attentionNotes.push(`Alacritty ${version[1]}.${version[2]} ignores terminal.shell, so its windows will not open in tmux; install Alacritty 0.14 or newer.`);

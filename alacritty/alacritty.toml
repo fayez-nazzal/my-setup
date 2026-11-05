@@ -1,3 +1,8 @@
+# Colors follow the system light/dark appearance. alacritty/theme-sync.sh writes
+# this import (see alacritty/README.md); a missing file falls back to defaults.
+[general]
+import = ["~/.config/alacritty/theme.toml"]
+
 # One default window owns the shared tmux session, even after tmuxscope renames it.
 # A duplicate default launch focuses the existing Mac window and exits.
 # Explicit `alacritty -e CMD` bypasses this guard and remains independent.

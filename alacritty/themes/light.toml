@@ -1,0 +1,33 @@
+# Light palette selected by theme-sync.sh when the system appearance is light.
+# Primary and selection colors match tmux's light (solarized/light) chrome.
+[colors.primary]
+background = "#F6F8FA"
+foreground = "#1F2328"
+
+[colors.cursor]
+text = "#F6F8FA"
+cursor = "#1F2328"
+
+[colors.selection]
+text = "#1F2328"
+background = "#8B98A5"
+
+[colors.normal]
+black = "#24292f"
+red = "#cf222e"
+green = "#116329"
+yellow = "#4d2d00"
+blue = "#0969da"
+magenta = "#8250df"
+cyan = "#1b7c83"
+white = "#626b76"
+
+[colors.bright]
+black = "#57606a"
+red = "#a40e26"
+green = "#1a7f37"
+yellow = "#633c01"
+blue = "#0969da"
+magenta = "#8250df"
+cyan = "#1b7c83"
+white = "#57606a"
