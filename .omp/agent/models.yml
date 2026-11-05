@@ -1,4 +1,7 @@
 providers:
+  typesafe:
+    # Resolved at runtime by op with the scoped OMP service account.
+    apiKey: "!op read \"op://OMP/OMP Jev/password\" --no-newline"
   anthropic:
     # Built-in provider: override only the Haiku 5.5 window. Pricing is unchanged,
     # so prompts above 100k input tokens still bill at the long-context rate.

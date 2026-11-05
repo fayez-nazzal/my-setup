@@ -1,9 +1,9 @@
 symbolPreset: nerd
 composer:
-  shape: box
+  shape: field
   tokenRate: true
 theme:
-  dark: dark-dracula
+  dark: light-honeycomb
   light: light-cyberpunk
 setupVersion: 2
 colorBlindMode: false
@@ -15,82 +15,68 @@ statusLine:
   transparent: true
 tui:
   resizeScrollback: rebuild
-  tight: false
+  tight: true
   vimMode: true
-  vimModeDisplay: text
+  vimModeDisplay: icon
+  reactions: true
+  completeScrollback: false
+  codexResetFireworks: true
+  mouse: false
 display:
   showTokenUsage: true
-  shimmer: kitt
+  shimmer: classic
+  pinnedAgents: full
+  subagentLivePreview: true
+  hideToolActivity: false
+  showTurnTime: true
+  cacheMissMarker: true
 defaultThinkingLevel: auto
 hideThinkingBlock: true
 steeringMode: all
 followUpMode: all
 modelRoles:
-  writer: openrouter/google/gemini-4-argon:high
+  writer: opencode-go/gemini-4-argon:high
   web: web/perplexity
-  default: openai-codex/gpt-6.1-terra
   tiny: minimax-code/MiniMax-M3.1-Flash:auto
   commit: minimax-code/MiniMax-M3.1-Flash:auto
-  task: anthropic/claude-haiku-5-5:auto
-  plan: anthropic/claude-opus-5-5:high
-  vision: openai-codex/gpt-6.1-terra:auto
-  advisor: kimi-code/k3.1-pro:low
+  vision: openai-codex/gpt-6-luna:auto
+  advisor: opencode-go/deepseek-v4.1-flash
   image: openai-codex/gpt-image-1:auto
   speech: local/kokoro
-  slow: openai-codex/gpt-6.1-sol:auto
-  judge: openai-codex/gpt-6.1-sol:auto
-  memory: openai-codex/gpt-6.1-sol:auto
-  smol: openai-codex/gpt-6-luna:auto
+  slow: kimi-code/k3.1-pro:auto
+  judge: typesafe/jev-latest
+  memory: openai-codex/gpt-6-luna:auto
+  smol: opencode-go/deepseek-v4.1-flash:auto
   dictation: local/parakeet-tdt-0.6b-v3
-  review: openai-codex/gpt-6.1-sol:auto
+  review: openai-codex/gpt-6.1-terra:auto
   SECONDARY: openai-codex/gpt-6.1-sol:auto
   EXTREME: openai-codex/gpt-6-astra:max
+  task: opencode-go/deepseek-v4.1-flash
+  plan: openai-codex/gpt-6.1-terra
+  default: opencode-go/gemini-4-argon
 retry:
+  waitForUsageReset: true
   fallbackChains:
-    plan:
-      - openai-codex/gpt-6.1-sol
-      - kimi-code/k3.1-pro
-    memory:
-      - anthropic/claude-sonnet-5-5
+    commit:
+      - openai-codex/gpt-6-luna
+    tiny:
+      - openai-codex/gpt-6-luna
+    vision:
       - minimax-code/MiniMax-M3.1-Flash
+    memory:
+      - minimax-code/MiniMax-M3.1-Flash
+    default:
+      - opencode-go/deepseek-v4.1-flash
+      - kimi-code/k3.1-pro
+    smol:
+      - minimax-code/MiniMax-M3.1-Flash
+      - openai-codex/gpt-6-luna
+      - kimi-code/k3.1-pro
+    slow:
+      - opencode-go/deepseek-v4.1-flash
     task:
       - openai-codex/gpt-6-luna
       - minimax-code/MiniMax-M3.1-Flash
-    writer:
-      - anthropic/claude-opus-5-5
-      - openai-codex/gpt-6.1-sol
-    smol:
-      - minimax-code/MiniMax-M3.1-Flash
-    judge:
-      - anthropic/claude-sonnet-5-5
-    tiny:
-      - openai-codex/gpt-6-luna
-      - anthropic/claude-haiku-5-5
-    commit:
-      - openai-codex/gpt-6-luna
-      - anthropic/claude-haiku-5-5
-    advisor:
-      - anthropic/claude-sonnet-5-5
-      - minimax-code/MiniMax-M3.1-Flash
-    review:
-      - anthropic/claude-haiku-5-5
-      - openai-codex/gpt-6.1-sol
-      - minimax-code/MiniMax-M3.1-Flash
-    SECONDARY:
-      - anthropic/claude-opus-5-5
-      - openai-codex/gpt-6.1-sol
-    EXTREME:
-      - anthropic/claude-opus-5-5
-      - openai-codex/gpt-6-astra
-    default:
-      - anthropic/claude-sonnet-5-5
-    slow:
-      - openai-codex/gpt-6.1-terra
-      - kimi-code/k3.1-pro
-    vision:
-      - anthropic/claude-sonnet-5-5
-      - minimax-code/MiniMax-M3.1-Flash
-  waitForUsageReset: true
 dev:
   autoqaConsent: denied
 cycleOrder:
@@ -123,6 +109,7 @@ bash:
       approval: deny
     - match: "* op *"
       approval: deny
+  direnv: auto
 checkpoint:
   enabled: true
 computer:
@@ -131,4 +118,107 @@ codexResets:
   autoRedeem: "no"
 claudeResets:
   autoRedeem: "no"
-extendedContext: false
+extendedContext: true
+title:
+  icons: nf+emoji
+prewalk:
+  enabled: true
+  auto: "on"
+advisor:
+  enabled: true
+  syncBacklog: "5"
+  reviewMode: agent-end
+  reviewInterval: 1
+  maxNotesPerUpdate: 4
+  evictStaleResults: true
+textVerbosity: low
+tier:
+  openai: auto
+  anthropic: none
+  google: none
+  subagent: auto
+  advisor: auto
+repetitionPenalty: -1
+presencePenalty: -1
+temperature: -1
+skillful: false
+personality: pragmatic
+providers:
+  anthropic:
+    serverSideFallback: false
+loop:
+  mode: prompt
+power:
+  sleepPrevention: system
+startup:
+  quiet: true
+autoResume: false
+update:
+  channel: stable
+marketplace:
+  autoUpdate: auto
+stt:
+  enabled: false
+compaction:
+  experimentalContextManagement: true
+  methodOrder:
+    - shake
+    - snapcompact
+    - handoff
+    - remote
+    - soft
+  thresholdPercent: 60
+  thresholdTokens: 500000
+  idleEnabled: true
+  idleThresholdTokens: 500000
+  idleTimeoutSeconds: 60
+ttsr:
+  judge: auto
+  contextMode: discard
+  builtinRules: true
+snapcompact:
+  systemPrompt: none
+autolearn:
+  enabled: false
+edit:
+  mode: hashline
+readLineNumbers: true
+read:
+  renderMarkdown: true
+  toolResultPreview: true
+  summarize:
+    prose: true
+lsp:
+  formatOnWrite: true
+  diagnosticsOnEdit: false
+  diagnosticsOnWrite: false
+  diagnosticsDeduplicate: false
+  lazy: false
+task:
+  eager: always
+  enableEffort: true
+  enableLsp: true
+  maxRecursionDepth: 0
+  maxEffort: high
+  prewalk: true
+  isolation:
+    enabled: true
+commands:
+  enableClaudeProject: false
+  enableOpencodeProject: false
+tools:
+  speculativeExecution:
+    enabled: true
+async:
+  printWake: false
+todo:
+  remindersMax: 5
+  eager: preferred
+tasks:
+  todoClearDelay: 0
+find:
+  enabled: auto
+extensions:
+  - /Users/fayez/.omp/agent/extensions/combo-toggle/index.js
+  - /Users/fayez/.omp/plugins/node_modules/@dietrichgebert/ponytail/pi-extension/index.js
+  - /Users/fayez/.omp/agent/extensions/shared/mode-reinforcement.js
