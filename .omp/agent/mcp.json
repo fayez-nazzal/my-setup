@@ -14,6 +14,19 @@
       "headers": {
         "Authorization": "!key=$(op read \"op://OMP/OMP EXCALIDRAW/password\" --no-newline) && printf 'Bearer %s' \"$key\""
       }
+    },
+    "newrelic": {
+      "type": "http",
+      "url": "https://mcp.newrelic.com/mcp/",
+      "oauth": {
+        "clientId": "pUWGgnjsQ0bydqCbavTPpw==",
+        "scope": "observability:read offline offline_access"
+      },
+      "auth": {
+        "type": "oauth",
+        "tokenUrl": "https://oauth2.service.newrelic.com/oauth2/token",
+        "clientId": "pUWGgnjsQ0bydqCbavTPpw=="
+      }
     }
   }
 }

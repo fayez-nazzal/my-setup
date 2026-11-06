@@ -53,7 +53,7 @@ modelRoles:
   EXTREME: openai-codex/gpt-6-astra:max
   task: opencode-go/deepseek-v4.1-flash
   plan: openai-codex/gpt-6.1-terra
-  default: opencode-go/gemini-4-argon
+  default: opencode-go/deepseek-v4.1-flash
 retry:
   waitForUsageReset: true
   fallbackChains:
