@@ -128,3 +128,27 @@ describe("Volta and Node LTS", () => {
     expect(result).toMatchObject({ code: 1, stderr: "network down" });
   });
 });
+
+describe("RTK", () => {
+  test("a healthy rtk binary is never reinstalled", async () => {
+    const { ctx, calls } = recorded(new Map([["rtk", "/h/.bun/bin/rtk"]]), () => ({ code: 0, stdout: "rtk 1.1.0", stderr: "" }));
+    expect((await inspectPackage(ctx, "rtk")).installed).toBe(true);
+    expect((await installRecipe(ctx, "rtk")).code).toBe(0);
+    expect(calls.some(call => call.command === "/usr/bin/curl")).toBe(false);
+  });
+  test("missing rtk installs the pinned archive into ~/.bun/bin", async () => {
+    const sandbox = await mkdtemp(join(tmpdir(), "rtk-install-"));
+    try {
+      const home = join(sandbox, "home");
+      await mkdir(home);
+      const probe = `#!/bin/sh\n[ "$1" = "--version" ] && echo "rtk 1.1.0"\n`;
+      const { archive, digest } = await fixtureArchive(sandbox, { rtk: probe });
+      const pins: DownloadPins = { rtk: { "linux-x64": { version: "1.1.0", url: "https://fixture.invalid/rtk-1.1.0.tar.gz", digest, members: ["rtk"] } } };
+      const calls: Call[] = [];
+      expect(await installRecipe(fixtureContext(home, archive, calls), "rtk", pins)).toMatchObject({ code: 0 });
+      expect(await readFile(join(home, ".bun/bin/rtk"), "utf8")).toBe(probe);
+    } finally {
+      await rm(sandbox, { recursive: true, force: true });
+    }
+  });
+});

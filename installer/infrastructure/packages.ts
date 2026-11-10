@@ -215,6 +215,24 @@ async function inspectAerospace(context: PackageContext): Promise<SoftwareState>
   return { installed: true, healthy: true, outdated: true, route: "aerospace-source", reason: "Rebuild AeroSpace from the newer main branch." };
 }
 
+async function inspectRtk(context: PackageContext): Promise<SoftwareState> {
+  if (await executableHealthy(context, "rtk")) return { installed: true, healthy: true };
+  if (!releasePin(context, "rtk")) return { installed: false, healthy: false, reason: `No pinned RTK release for ${context.host.platform}-${context.host.architecture}.` };
+  if (!commandFor(context.host, "curl") || !commandFor(context.host, "tar")) return { installed: false, healthy: false, reason: "curl and tar are required to install the pinned RTK archive." };
+  return { installed: false, healthy: false, route: "rtk-release" };
+}
+
+/** Publish the pinned rtk binary into ~/.bun/bin, the directory the OMP RTK extension and the /ai-addons updater use. */
+async function installRtk(context: PackageContext, pins: DownloadPins): Promise<CommandResult> {
+  const pin = releasePin(context, "rtk", pins);
+  if (!pin) return { code: 1, stdout: "", stderr: `No pinned RTK release for ${context.host.platform}-${context.host.architecture}.` };
+  const destination = join(context.home, ".bun", "bin", "rtk");
+  return installPinnedArchive(context, pin, () => destination, async () => {
+    const probe = await context.run(destination, ["--version"], { quiet: true });
+    if (probe.code !== 0 || !probe.stdout.includes(pin.version)) throw new Error(`rtk release failed its version probe (expected ${pin.version}, got ${probe.stdout.trim() || "nothing"})`);
+  });
+}
+
 export async function inspectSoftware(context: PackageContext, id: string): Promise<SoftwareState> {
   if (id === "linux-desktop") {
     if (context.host.platform !== "linux" || !context.host.packageManagers.apt) return { installed: false, healthy: false, reason: "The native desktop bundle requires Linux with APT." };
@@ -229,6 +247,7 @@ export async function inspectSoftware(context: PackageContext, id: string): Prom
   if (id === "volta") return inspectVolta(context);
   if (id === "node-lts") return inspectNodeLts(context);
   if (id === "nerd-font") return inspectGeistFont(context);
+  if (id === "rtk") return inspectRtk(context);
   if (id === "alacritty" && context.host.platform === "darwin") return inspectAlacrittyDarwin(context);
   if (id === "aerospace" && context.host.platform === "darwin") return inspectAerospace(context);
   const brew = context.host.packageManagers.brew;
@@ -378,6 +397,12 @@ export async function installRecipe(context: PackageContext, id: string, pins: D
     return installVolta(context, pins);
   }
   if (id === "nerd-font") return installGeistFont(context, pins);
+  if (id === "rtk") {
+    const state = await inspectRtk(context);
+    if (state.installed) return { code: 0, stdout: "rtk is already healthy", stderr: "" };
+    if (!state.route) return { code: 1, stdout: "", stderr: state.reason ?? "RTK cannot be installed." };
+    return installRtk(context, pins);
+  }
   const state = await inspectSoftware(context, id);
   if (state.route === "brew-upgrade" && state.packageName) return brewPackageCommand(context, "upgrade", state.packageName);
   if (state.installed) return { code: 0, stdout: `${id} is already healthy`, stderr: "" };

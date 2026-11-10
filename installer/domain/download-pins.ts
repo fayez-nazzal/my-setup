@@ -38,6 +38,12 @@ export const downloadPins: DownloadPins = {
     "linux-x64": { version: "2.0.2", url: release("jkfran/killport", "v2.0.2", "killport-x86_64-linux-gnu.tar.gz"), digest: "c65463fe93947ef0f14405a61a1428877801f7aa884db29b71a58b21d83fe80b", members: ["killport-x86_64-linux-gnu/killport"] },
     "linux-arm64": { version: "2.0.2", url: release("jkfran/killport", "v2.0.2", "killport-aarch64-linux-gnu.tar.gz"), digest: "7b2f524dce0a66f452e28c9d74f9ad3173c0a2459626b181357657d96c1608f4", members: ["killport-aarch64-linux-gnu/killport"] },
   },
+  rtk: {
+    "darwin-arm64": { version: "1.1.0", url: release("rtk-ai/rtk", "v1.1.0", "rtk-aarch64-apple-darwin.tar.gz"), digest: "8da773b0954cf90b115ec95c4e4eb420f04c39de233c5db102246a6caf073ba7", members: ["rtk"] },
+    "darwin-x64": { version: "1.1.0", url: release("rtk-ai/rtk", "v1.1.0", "rtk-x86_64-apple-darwin.tar.gz"), digest: "1e23e8b9542b58428e6409c49b1c3fb92c4c0d5125da72e80f002a46086a6c20", members: ["rtk"] },
+    "linux-x64": { version: "1.1.0", url: release("rtk-ai/rtk", "v1.1.0", "rtk-x86_64-unknown-linux-musl.tar.gz"), digest: "9454ad1b9489daa57ab0a9f4ebe2faaf4dc82b8a0f26c9e5135151abd7c9378d", members: ["rtk"] },
+    "linux-arm64": { version: "1.1.0", url: release("rtk-ai/rtk", "v1.1.0", "rtk-aarch64-unknown-linux-gnu.tar.gz"), digest: "a5c00c3ab0129884bcb757d348afc1a650efa0f4f0769da97c341f28f89719ed", members: ["rtk"] },
+  },
   starship: {
     "linux-x64": { version: "1.27.0", url: release("starship/starship", "v1.27.0", "starship-x86_64-unknown-linux-musl.tar.gz"), digest: "10c8eb4cb3b761d9bf59ea828444c2dab36c900b7d69a69e08814b286969df89", members: ["starship"] },
     "linux-arm64": { version: "1.27.0", url: release("starship/starship", "v1.27.0", "starship-aarch64-unknown-linux-musl.tar.gz"), digest: "341f5cbf24699fa0b27ec88965ad25f862ea09e15d35a543fd6ffdff1d2aa00d", members: ["starship"] },

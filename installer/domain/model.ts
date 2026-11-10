@@ -2,7 +2,7 @@ export type ComponentId =
   | "xcode" | "aws-cli" | "corretto21" | "java-home"
   | "zsh-config" | "git-config" | "tmux-config" | "omp-config" | "tmuxscope-config" | "alacritty-config" | "styleguard"
   | "aerospace-config" | "gnome-config" | "keyd-config" | "amphetamine-config"
-  | "zsh" | "git" | "tmux" | "tmux-plugins" | "github-tools" | "github-tools-cron" | "zsh-abbr" | "starship" | "zoxide" | "fzf" | "bat" | "eza" | "fd" | "ripgrep" | "thefuck" | "killport" | "volta" | "node-lts" | "alacritty" | "nerd-font"
+  | "zsh" | "git" | "tmux" | "tmux-plugins" | "github-tools" | "github-tools-cron" | "zsh-abbr" | "starship" | "zoxide" | "fzf" | "bat" | "eza" | "fd" | "ripgrep" | "thefuck" | "killport" | "rtk" | "volta" | "node-lts" | "alacritty" | "nerd-font"
   | "1password-cli" | "1password" | "gh" | "obsidian" | "1password-signin" | "gh-auth" | "git-signing"
   | "aerospace" | "google-chrome" | "orbstack" | "amphetamine" | "linux-desktop" | "keyd" | "gnome-apply" | "macos-defaults";
 export type Platform = "darwin" | "linux";

@@ -73,6 +73,12 @@ Account dialogs happen before long builds.
   It creates and verifies a scoped replacement token, backs up the old
   Keychain value, and resets trusted applications. OMP refuses to launch
   with a token that cannot authenticate.
+- **RTK:** The `rtk` software choice installs the pinned, digest-checked
+  release into `~/.bun/bin/rtk`. Its OMP extension lives in the linked
+  extensions directory and rewrites plain bash commands to compact output.
+  `/rtk off` disables OMP's extra RTK guidance only; use an absolute binary
+  path or set `RTK_DISABLED=1` in OMP's environment when raw output is
+  required.
 - **OMP theme:** The installer links the two high-contrast themes and the
   `system-theme` extension. The extension watches Alacritty's generated
   appearance file and switches running interactive OMP sessions after it

@@ -34,6 +34,7 @@ export const catalog: readonly ComponentDefinition[] = [
   { id: "ripgrep", label: "ripgrep", description: "Install ripgrep (rg) only when no healthy executable is available.", group: "Software", platforms: both, requires: [] },
   { id: "thefuck", label: "thefuck", description: "Install thefuck only when no healthy executable is available.", group: "Software", platforms: both, requires: [] },
   { id: "killport", label: "killport", description: "Install killport (free a port by killing its processes) via Homebrew, APT, or its pinned, digest-checked Linux release archive.", group: "Software", platforms: both, requires: [] },
+  { id: "rtk", label: "RTK", description: "Install the pinned, digest-checked RTK release into ~/.bun/bin; OMP's rtk extension then rewrites plain bash commands to compact output.", group: "Software", platforms: both, requires: [] },
   { id: "volta", label: "Volta", description: "Install the pinned, digest-checked Volta toolchain manager into ~/.volta (or $VOLTA_HOME) without running Volta setup or editing shell startup files (zsh config already exports it).", group: "Software", platforms: both, requires: [] },
   { id: "node-lts", label: "Node LTS (via Volta)", description: "Run `volta install node` to download the latest Node LTS as the default runtime.", group: "Software", platforms: both, requires: ["volta"] },
   { id: "aws-cli", label: "AWS CLI v2", description: "Install and verify AWS CLI v2 for this OS and CPU; AWS credentials remain machine-local.", group: "Software", platforms: both, requires: [] },
