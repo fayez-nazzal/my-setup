@@ -2,7 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { getSharedComboState, isOmpSubagentPrompt, setSharedComboMode } from "../shared/session-state.js";
 
-const DEFAULT_ENABLED = false;
+const DEFAULT_ENABLED = true;
 
 function asBoolean(value, fallback = DEFAULT_ENABLED) {
   if (typeof value === "boolean") return value;
@@ -26,8 +26,9 @@ const HOME = os.homedir();
 const RTK_BINARY = path.join(HOME, ".bun", "bin", IS_WINDOWS ? "rtk.exe" : "rtk");
 
 const RTK_PROMPT = `RTK mode active for this session.
-Use Rust Token Killer for shell output that would otherwise be noisy. Prefer explicit RTK commands in bash: \`rtk git status\`, \`rtk git diff\`, \`rtk read <file>\`, \`rtk grep <pattern> <path>\`, \`rtk find <glob> <path>\`, \`rtk test <cmd...>\`, \`rtk tsc\`, \`rtk lint\`, or \`rtk <tool> ...\` for supported dev commands.
-Do not use RTK when exact raw output is required, when a specialized OMP tool is required by system policy, or when the command changes state and RTK would hide important confirmation text. Specialized OMP tools still win: read/glob/grep/edit/lsp stay preferred over shell equivalents.`;
+OMP rewrites plain bash commands through \`rtk rewrite\` automatically, so ordinary bash output is compacted even without an explicit rtk call.
+Prefer explicit RTK commands when you know the equivalent: \`rtk git status\`, \`rtk git diff\`, \`rtk read <file>\`, \`rtk grep <pattern> <path>\`, \`rtk find <glob> <path>\`, \`rtk test <cmd...>\`, \`rtk tsc\`, \`rtk lint\`, or \`rtk <tool> ...\` for supported dev commands.
+Do not use RTK when exact raw output is required, when a specialized OMP tool is required by system policy, or when the command changes state and RTK would hide important confirmation text. Specialized OMP tools still win: read/glob/grep/edit/lsp stay preferred over shell equivalents. For raw output, call the binary by absolute path (for example \`/usr/bin/git status\`) or use a form RTK leaves alone (redirection, \`$(...)\`); \`RTK_DISABLED=1\` only takes effect when set in OMP's own environment.`;
 
 export default function rtkSessionExtension(pi) {
   const { z } = pi.zod;
@@ -40,13 +41,13 @@ export default function rtkSessionExtension(pi) {
     const c = ctx || lastCtx;
     if (!c?.ui?.setStatus) return;
     if (!enabled) {
-      c.ui.setStatus("rtk", "");
+      c.ui.setStatus("rtk-session", "");
       return;
     }
     const theme = c.ui.theme;
     const indicator = isActive && theme?.fg ? theme.fg("accent", "●") : "●";
     const label = "rtk: ON";
-    c.ui.setStatus("rtk", theme?.fg ? `${indicator} ${theme.fg("muted", label)}` : `${indicator} ${label}`);
+    c.ui.setStatus("rtk-session", theme?.fg ? `${indicator} ${theme.fg("muted", label)}` : `${indicator} ${label}`);
   }
 
   function setEnabled(next, ctx) {
@@ -54,7 +55,12 @@ export default function rtkSessionExtension(pi) {
     pi.appendEntry("rtk-mode", { enabled });
     setSharedComboMode("rtk", enabled);
     syncStatus(ctx);
-    ctx?.ui?.notify?.(`RTK mode ${enabled ? "on" : "off"}.`, "info");
+    ctx?.ui?.notify?.(
+      enabled
+        ? "RTK guidance on. Plain bash commands are rewritten automatically."
+        : "RTK guidance off. Automatic bash rewriting remains active; use an absolute binary path for raw output.",
+      "info",
+    );
   }
 
   pi.setLabel?.("RTK session toggle");
@@ -64,7 +70,7 @@ export default function rtkSessionExtension(pi) {
     handler: async (args, ctx) => {
       const arg = String(args || "").trim().toLowerCase();
       if (!arg || arg === "status") {
-        ctx?.ui?.notify?.(`RTK: ${enabled ? "on" : "off"}`, "info");
+        ctx?.ui?.notify?.(`RTK guidance: ${enabled ? "on" : "off"} (automatic bash rewriting is separate)`, "info");
         return;
       }
       if (["on", "enable", "enabled", "true"].includes(arg)) {
@@ -115,6 +121,7 @@ export default function rtkSessionExtension(pi) {
   function restoreEnabled(ctx) {
     const entries = ctx?.sessionManager?.getBranch?.() || ctx?.sessionManager?.getEntries?.() || [];
     enabled = resolveEnabled(entries);
+    setSharedComboMode("rtk", enabled);
     syncStatus(ctx);
   }
 
