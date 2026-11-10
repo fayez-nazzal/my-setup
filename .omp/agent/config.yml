@@ -5,7 +5,7 @@ composer:
 theme:
   dark: dark-dracula-hc
   light: light-cyberpunk-hc
-setupVersion: 2
+setupVersion: 3
 colorBlindMode: false
 statusLine:
   preset: nerd
@@ -37,23 +37,23 @@ followUpMode: all
 modelRoles:
   writer: opencode-go/gemini-4-argon:high
   web: web/perplexity
-  tiny: minimax-code/MiniMax-M3.1-Flash:auto
-  commit: minimax-code/MiniMax-M3.1-Flash:auto
-  vision: openai-codex/gpt-6-luna:auto
+  tiny: minimax-code/MiniMax-M3.1-Flash:high
+  commit: minimax-code/MiniMax-M3.1-Flash:high
+  vision: openai-codex/gpt-6-luna:high
   advisor: opencode-go/deepseek-v4.1-flash
   image: openai-codex/gpt-image-1:auto
   speech: local/kokoro
-  slow: kimi-code/k3.1-pro:auto
+  slow: kimi-code/k3.1-pro:high
   judge: typesafe/jev-latest
-  memory: openai-codex/gpt-6-luna:auto
-  smol: opencode-go/deepseek-v4.1-flash:auto
+  memory: openai-codex/gpt-6-luna:high
+  smol: opencode-go/deepseek-v4.1-flash:high
   dictation: local/parakeet-tdt-0.6b-v3
-  review: openai-codex/gpt-6.1-terra:auto
-  SECONDARY: openai-codex/gpt-6.1-sol:auto
-  EXTREME: openai-codex/gpt-6-astra:max
+  review: openai-codex/gpt-6.1-terra:high
+  SECONDARY: openai-codex/gpt-6.1-sol:high
+  EXTREME: openai-codex/gpt-6-astra:high
   task: opencode-go/deepseek-v4.1-flash
-  plan: openai-codex/gpt-6.1-terra
-  default: opencode-go/deepseek-v4.1-flash
+  plan: openai-codex/gpt-6.1-terra:high
+  default: openai-codex/gpt-6.1-terra:high
 retry:
   waitForUsageReset: true
   fallbackChains:
@@ -87,6 +87,7 @@ cycleOrder:
   - review
   - SECONDARY
   - EXTREME
+  - plan
 github:
   enabled: true
 speechgen:
@@ -155,6 +156,7 @@ startup:
 autoResume: false
 update:
   channel: stable
+  auto: true
 marketplace:
   autoUpdate: auto
 stt:

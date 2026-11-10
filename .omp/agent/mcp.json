@@ -27,6 +27,20 @@
         "tokenUrl": "https://oauth2.service.newrelic.com/oauth2/token",
         "clientId": "pUWGgnjsQ0bydqCbavTPpw=="
       }
+    },
+    "aws-mcp": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "mcp-proxy-for-aws@latest",
+        "https://aws-mcp.us-east-1.api.aws/mcp",
+        "--metadata",
+        "INSTALL_SOURCE=aws-cli"
+      ]
+    },
+    "cloudflare-api": {
+      "type": "http",
+      "url": "https://mcp.cloudflare.com/mcp"
     }
   }
 }
