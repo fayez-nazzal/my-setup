@@ -1,5 +1,4 @@
-import { constants } from "node:fs";
-import { access, lstat } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import { BoxRenderable, TextRenderable, createCliRenderer } from "@opentui/core";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -10,9 +9,8 @@ import { UserFileLinks, assertOmpAgentDirectoryIsReal, migrateZshLocal, scanBack
 import { inspectHost } from "./infrastructure/host";
 import { inspectPackage, installRecipe, packageSudoRoutes } from "./infrastructure/packages";
 import type { SoftwareState } from "./infrastructure/packages";
-import { amphetamineApp, appIds, appSudoRoutes, inspectApp, installApp, opSshSignPath } from "./infrastructure/apps";
-import { configureGitDefaults, configureGitSigning, currentSigningMethod, ensureGhAuth, gitConfigTarget, signingItems, signingKeyPath } from "./infrastructure/github";
-import { ensureOpSession } from "./infrastructure/onepassword";
+import { amphetamineApp, appIds, appSudoRoutes, inspectApp, installApp } from "./infrastructure/apps";
+import { configureGitDefaults } from "./infrastructure/github";
 import { configureJavaHome, inspectRuntime, installRuntime, runtimeIds, runtimeSudoRoutes } from "./infrastructure/runtimes";
 import { configureXcode, inspectXcode } from "./infrastructure/xcode";
 import { prepareMacPermissions } from "./infrastructure/permissions";
@@ -38,7 +36,7 @@ const refreshHost = async () => {
 };
 const recipeContext = { host: recipeHost, home, repoRoot: root, run: commands.run.bind(commands), ensureLink: fileLinks.ensureLink.bind(fileLinks), backupUserFile: fileLinks.backup.bind(fileLinks), refreshHost };
 const availability = new Map<ComponentId, ComponentAvailability>();
-const softwareIds: ComponentId[] = ["zsh","git","tmux","starship","zoxide","fzf","bat","eza","fd","ripgrep","thefuck","killport","rtk","volta","node-lts","aws-cli","corretto21","alacritty","nerd-font","1password-cli","1password","gh","obsidian","aerospace","google-chrome","orbstack","amphetamine","linux-desktop","keyd"];
+const softwareIds: ComponentId[] = ["zsh","git","tmux","starship","zoxide","fzf","bat","eza","fd","ripgrep","thefuck","killport","rtk","volta","node-lts","aws-cli","corretto21","alacritty","nerd-font","gh","obsidian","aerospace","google-chrome","orbstack","amphetamine","linux-desktop","keyd"];
 const softwareStates = new Map<ComponentId, SoftwareState>();
 const inspect = (id: ComponentId) => runtimeIds.has(id) ? inspectRuntime(recipeContext, id) : appIds.has(id) ? inspectApp(recipeContext, id) : inspectPackage(recipeContext, id);
 const sudoRoutes = new Set([...packageSudoRoutes, ...appSudoRoutes, ...runtimeSudoRoutes]);
@@ -160,8 +158,8 @@ const visit = (id: ComponentId): void => {
   for (const earlier of runAfter[id] ?? []) visit(earlier);
   executionOrder.push(id);
 };
-// Ask account/integration approvals as soon as their apps/CLIs are ready, before long builds.
-for (const early of ["xcode", "1password", "1password-cli", "1password-signin", "gh", "gh-auth", "git-signing"] as const) visit(early);
+// Verify Xcode before long builds.
+for (const early of ["xcode"] as const) visit(early);
 for (const item of catalog) visit(item.id);
 for (const id of executionOrder) {
   if (permissionBlocks.has(id)) {
@@ -188,18 +186,7 @@ for (const id of executionOrder) {
         const plan = await commands.run(githubToolsScript(root), id === "github-tools" ? ["list"] : ["cron", "show"], { quiet: true });
         console.log(`${id}: ${id === "github-tools" ? "sync (only signed-and-enrolled commits are built or linked)" : "crontab entry"}\n${plan.stdout.trimEnd().replace(/^/gm, "  ")}`);
       }
-      else if (id === "1password-signin") console.log(`${id}: install op when missing; check op vault access; otherwise enable the app's CLI integration, or op account add + op signin (interactive)`);
-      else if (id === "gh-auth") console.log(`${id}: check gh auth status; otherwise gh auth login --web with the admin:ssh_signing_key and write:gpg_key scopes (interactive)`);
-      else if (id === "git-signing") {
-        const git = host.executables.get("git");
-        const target = git ? (await gitConfigTarget(recipeContext, git)).at(-1) : "~/.gitconfig.local";
-        const method = git ? await currentSigningMethod(recipeContext, git) : undefined;
-        const signer = await access(opSshSignPath(host.platform), constants.X_OK).then(() => `op-ssh-sign (${opSshSignPath(host.platform)})`, () => `ssh-keygen with ${signingKeyPath(home)} encrypted by “${signingItems.passphrase}”`);
-        const gpgPlan = `OpenPGP: gpg + pinentry, the configured key or 1Password “${signingItems.gpgSecretKey}” (offer a backup when missing), unlocked by “${signingItems.passphrase}”; set gpg.format=openpgp, user.signingkey, commit.gpgsign=true`;
-        const sshPlan = `SSH: 1Password “${signingItems.sshKey}” signed by ${signer}; set gpg.format=ssh, user.signingkey, gpg.ssh.program, gpg.ssh.allowedSignersFile, commit.gpgsign=true`;
-        console.log(`${id}: ${method === "openpgp" ? gpgPlan : method === "ssh" ? sshPlan : `ask which method — ${gpgPlan} | ${sshPlan}`} in ${target}; register the key on GitHub; verify a test commit`);
-      }
-      else console.log(`${id}: ${softwareStates.get(id)?.route ?? "selected operation"}${softwareStates.get(id)?.reason ? ` (${softwareStates.get(id)?.reason})` : ""}`);
+     else console.log(`${id}: ${softwareStates.get(id)?.route ?? "selected operation"}${softwareStates.get(id)?.reason ? ` (${softwareStates.get(id)?.reason})` : ""}`);
       results.push({ id, status:"unchanged", attention:[] }); continue;
     }
     if (id === "omp-config") await assertOmpAgentDirectoryIsReal(home);
@@ -255,12 +242,6 @@ for (const id of executionOrder) {
     else if (id === "amphetamine-config") outcome = await applyAmphetamine(recipeContext, amphetamineApp);
     else if (id === "xcode") outcome = await configureXcode(recipeContext);
     else if (id === "java-home") outcome = await configureJavaHome(recipeContext);
-    else if (id === "1password-signin") {
-      const session = await ensureOpSession(recipeContext);
-      outcome = session.ok ? { id, status: session.changed ? "changed" : "unchanged", attention: [] } : { id, status: "blocked", attention: [session.reason] };
-    }
-    else if (id === "gh-auth") outcome = await ensureGhAuth(recipeContext);
-    else if (id === "git-signing") outcome = await configureGitSigning(recipeContext);
     else if (id === "git-config") outcome = await configureGitDefaults(recipeContext, fileLinks);
     else {
       if ((sudoRoutes.has(softwareStates.get(id)?.route ?? "") || id === "linux-desktop" || id === "keyd") && !sudoAvailable) outcome = { id, status:"blocked", attention:["Elevation was declined or unavailable; rerun the exact package command with sudo."] };

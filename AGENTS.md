@@ -34,11 +34,11 @@ pieces from `$HOME`, one from a system config directory that needs root.
    the machine itself, ask the user instead of guessing or fabricating a
    placeholder that looks real.
 6. **Never commit, print, or write a real secret into any tracked file.**
-   Secrets and machine-local identity belong in the untracked file each
-   relevant README names. If a tracked file or the install output ever
-   surfaces something that looks like a real secret, treat it as a bug:
-   remove it from tracked content, move it to the correct untracked file,
-   and tell the user to rotate it.
+   Supply credentials explicitly through untracked, machine-local environment
+   variables; do not add shared password-manager or token-storage integrations.
+   If a tracked file or the install output ever surfaces something that looks
+   like a real secret, treat it as a bug: remove it from tracked content and
+   tell the user to rotate it.
 7. **Never silently overwrite an existing configuration.** Back up first
    (the script already does this) and surface what was replaced.
 

@@ -41,13 +41,8 @@ export const catalog: readonly ComponentDefinition[] = [
   { id: "corretto21", label: "Amazon Corretto 21", description: "Install Amazon's Corretto JDK 21; verify both the Java version and Corretto vendor.", group: "Software", platforms: both, requires: [] },
   { id: "alacritty", label: "Alacritty", description: "Install Alacritty; on macOS build the latest stable release (Xcode tools, Rust, scdoc) and rebuild when a newer one ships.", group: "Software", platforms: both, requires: ["git"] },
   { id: "nerd-font", label: "Geist Mono Nerd Font", description: "Install GeistMono Nerd Font Mono for Alacritty (Regular, Bold, Italic).", group: "Software", platforms: both, requires: [] },
-  { id: "1password-cli", label: "1Password CLI", description: "Install op: Homebrew cask or AgileBits' signed package on macOS; 1Password's signed APT repository or signed archive (~/.local/bin) on Linux amd64/arm64.", group: "Software", platforms: both, requires: [] },
-  { id: "1password", label: "1Password", description: "Install the 1Password app (Homebrew cask on macOS; signed APT repository on Linux amd64, signed tarball into /opt/1Password on arm64). Desktop only.", group: "Software", platforms: both, requires: [] },
   { id: "gh", label: "GitHub CLI", description: "Install gh: Homebrew, GitHub's signed APT repository, or its digest-checked release into ~/.local/bin.", group: "Software", platforms: both, requires: [] },
   { id: "obsidian", label: "Obsidian", description: "Install Obsidian (Homebrew cask on macOS; digest-checked .deb on Linux amd64, release tarball into /opt/Obsidian on arm64). Desktop only.", group: "Software", platforms: both, requires: [] },
-  { id: "1password-signin", label: "1Password CLI sign-in", description: "Install op when missing, then connect it: the app's CLI integration where 1Password runs, otherwise op account add (address, email, Secret Key, password) and op signin.", group: "Accounts and signing", platforms: both, requires: ["1password-cli"] },
-  { id: "gh-auth", label: "GitHub CLI sign-in", description: "Run gh auth login (device code) with the admin:ssh_signing_key and write:gpg_key scopes; HTTPS Git credentials through gh.", group: "Accounts and signing", platforms: both, requires: ["gh"] },
-  { id: "git-signing", label: "Git commit signing (1Password)", description: "Keep or choose GPG (key from this keyring or 1Password “GPG Secret Key”, passphrase “GPG Key Password”) or SSH (1Password “SSH Key”); register it on GitHub and verify a test commit.", group: "Accounts and signing", platforms: both, requires: ["git", "1password-cli"] },
   { id: "aerospace", label: "AeroSpace", description: "Build AeroSpace from main with full Xcode (rebuilt when main moves); otherwise install the Homebrew cask.", group: "OS software/state", platforms: mac, requires: [] },
   { id: "google-chrome", label: "Google Chrome", description: "Install Google Chrome with the Homebrew cask.", group: "OS software/state", platforms: mac, requires: [] },
   { id: "orbstack", label: "OrbStack", description: "Install OrbStack (Docker and Linux machines) with the Homebrew cask.", group: "OS software/state", platforms: mac, requires: [] },
@@ -98,11 +93,7 @@ export const configurationPrerequisites: Partial<Record<ComponentId, readonly st
 export const runAfter: Partial<Record<ComponentId, readonly ComponentId[]>> = {
   // The tmuxscope binary comes from the GitHub tools sync; link its scopes after it is in place.
   "tmuxscope-config": ["github-tools"],
-  // App integration and op-ssh-sign come from the app; signing registers the key through a signed-in gh.
-  "1password-signin": ["1password"],
-  "gh-auth": ["1password"],
-  "git-signing": ["git-config", "1password", "1password-signin", "gh-auth"],
   "amphetamine-config": ["amphetamine"],
 };
 /** Components that need a graphical session; a headless Linux server disables them. */
-export const desktopOnly: ReadonlySet<ComponentId> = new Set<ComponentId>(["alacritty-config", "gnome-config", "keyd-config", "alacritty", "nerd-font", "1password", "obsidian", "linux-desktop", "keyd", "gnome-apply"]);
+export const desktopOnly: ReadonlySet<ComponentId> = new Set<ComponentId>(["alacritty-config", "gnome-config", "keyd-config", "alacritty", "nerd-font", "obsidian", "linux-desktop", "keyd", "gnome-apply"]);

@@ -3,7 +3,7 @@ export type ComponentId =
   | "zsh-config" | "git-config" | "tmux-config" | "omp-config" | "tmuxscope-config" | "alacritty-config" | "styleguard"
   | "aerospace-config" | "gnome-config" | "keyd-config" | "amphetamine-config"
   | "zsh" | "git" | "tmux" | "tmux-plugins" | "github-tools" | "github-tools-cron" | "zsh-abbr" | "starship" | "zoxide" | "fzf" | "bat" | "eza" | "fd" | "ripgrep" | "thefuck" | "killport" | "rtk" | "volta" | "node-lts" | "alacritty" | "nerd-font"
-  | "1password-cli" | "1password" | "gh" | "obsidian" | "1password-signin" | "gh-auth" | "git-signing"
+  | "gh" | "obsidian"
   | "aerospace" | "google-chrome" | "orbstack" | "amphetamine" | "linux-desktop" | "keyd" | "gnome-apply" | "macos-defaults";
 export type Platform = "darwin" | "linux";
 export interface ComponentDefinition { id: ComponentId; label: string; description: string; group: "Prerequisites" | "Configuration" | "OS configuration" | "Software" | "Accounts and signing" | "OS software/state"; platforms: readonly Platform[]; requires: readonly ComponentId[] }

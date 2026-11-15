@@ -8,18 +8,10 @@ import type { Platform } from "./host";
 import { downloadVerified } from "./downloads";
 
 /** Apps with their own inspect/install routes per OS and CPU (the rest of the software list lives in packages.ts). */
-export const appIds: ReadonlySet<string> = new Set(["1password", "1password-cli", "obsidian", "gh", "google-chrome", "orbstack", "amphetamine"]);
+export const appIds: ReadonlySet<string> = new Set(["obsidian", "gh", "google-chrome", "orbstack", "amphetamine"]);
 /** Routes that elevate with sudo; the CLI authenticates once before running them (mas asks sudo itself otherwise). */
-export const appSudoRoutes: ReadonlySet<string> = new Set(["1password-apt", "1password-tar", "op-pkg", "obsidian-deb", "obsidian-tar", "gh-apt", "amphetamine-mas"]);
-
-export const opSshSignPath = (platform: Platform) => platform === "darwin" ? "/Applications/1Password.app/Contents/MacOS/op-ssh-sign" : "/opt/1Password/op-ssh-sign";
-export const onePasswordAgentSocket = (platform: Platform, home: string) => platform === "darwin" ? join(home, "Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock") : join(home, ".1password/agent.sock");
-export const onePasswordAppBinary = (platform: Platform) => platform === "darwin" ? "/Applications/1Password.app/Contents/MacOS/1Password" : "/opt/1Password/1password";
+export const appSudoRoutes: ReadonlySet<string> = new Set(["obsidian-deb", "obsidian-tar", "gh-apt", "amphetamine-mas"]);
 const obsidianAppBinary = (platform: Platform) => platform === "darwin" ? "/Applications/Obsidian.app/Contents/MacOS/Obsidian" : "/opt/Obsidian/obsidian";
-/** AgileBits signs the Linux packages, tarballs, and CLI binaries with this key. */
-const onePasswordKey = { url: "https://downloads.1password.com/linux/keys/1password.asc", fingerprint: "3FEF9748469ADBE15DA7CA80AC2D62742012EA22" };
-const onePasswordPkgSigner = "Developer ID Installer: AgileBits Inc. (2BUA8C4S2C)";
-
 const done = (stdout: string): CommandResult => ({ code: 0, stdout, stderr: "" });
 const fail = (stderr: string): CommandResult => ({ code: 1, stdout: "", stderr });
 const exe = (c: PackageContext, name: string) => c.host.executables.get(name);
@@ -62,19 +54,6 @@ async function sudo(c: PackageContext, args: readonly string[], failure: string)
   if (result.code !== 0) throw new Error(failure);
 }
 
-/** Verify a detached signature against one pinned key in a throwaway keyring; never touches ~/.gnupg. */
-async function verifySignature(c: PackageContext, workspace: string, key: { url: string; fingerprint: string }, signature: string, file: string): Promise<void> {
-  const gpg = exe(c, "gpg");
-  if (!gpg) throw new Error("gpg is required to verify the 1Password signature; install gnupg and rerun.");
-  const home = join(workspace, "gnupg"); await mkdir(home, { mode: 0o700, recursive: true });
-  const keyFile = join(workspace, "signing-key.asc");
-  await download(c, key.url, keyFile);
-  const env = { GNUPGHOME: home };
-  if ((await c.run(gpg, ["--batch", "--quiet", "--import", keyFile], { quiet: true, env })).code !== 0) throw new Error("Could not import the 1Password signing key.");
-  const verified = await c.run(gpg, ["--batch", "--status-fd", "1", "--verify", signature, file], { quiet: true, env });
-  if (verified.code !== 0 || !verified.stdout.split("\n").some(line => line.startsWith("[GNUPG:] VALIDSIG ") && line.trim().endsWith(key.fingerprint))) throw new Error(`${basename(file)} is not signed by 1Password's key ${key.fingerprint}.`);
-}
-
 interface GithubAsset { url: string; digest: string }
 /** Asset URL plus the SHA-256 digest GitHub publishes for it; releases without digests are refused. */
 async function githubAsset(c: PackageContext, repository: string, tag: string, name: string): Promise<GithubAsset> {
@@ -93,14 +72,7 @@ async function findDirectoryWith(root: string, file: string): Promise<string> {
   throw new Error(`Archive has no ${file}.`);
 }
 
-interface AptRepository { label: string; host: string; key: { url: string; fingerprint: string; armored: boolean }; keyring: string; list: string; line(arch: string): string; debsig?: { policyUrl: string; policyDirectory: string; keyringDirectory: string } }
-const onePasswordRepository: AptRepository = {
-  label: "1Password", host: "downloads.1password.com/linux/debian",
-  key: { ...onePasswordKey, armored: true },
-  keyring: "/usr/share/keyrings/1password-archive-keyring.gpg", list: "/etc/apt/sources.list.d/1password.list",
-  line: arch => `deb [arch=${arch} signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/${arch} stable main`,
-  debsig: { policyUrl: "https://downloads.1password.com/linux/debian/debsig/1password.pol", policyDirectory: "/etc/debsig/policies/AC2D62742012EA22", keyringDirectory: "/usr/share/debsig/keyrings/AC2D62742012EA22" },
-};
+interface AptRepository { label: string; host: string; key: { url: string; fingerprint: string; armored: boolean }; keyring: string; list: string; line(arch: string): string }
 const githubCliRepository: AptRepository = {
   label: "GitHub CLI", host: "cli.github.com/packages",
   key: { url: "https://cli.github.com/packages/githubcli-archive-keyring.gpg", fingerprint: "2C6106201985B60E6C7AC87323F3D4EA75716059", armored: false },
@@ -123,8 +95,7 @@ export async function ensureAptRepository(c: PackageContext, repository: AptRepo
   const line = `${repository.line(debArch(c))}\n`;
   const ours = await readFile(repository.list, "utf8").catch(() => undefined);
   const keyringPresent = await access(repository.keyring).then(() => true, () => false);
-  const debsigPresent = !repository.debsig || await access(join(repository.debsig.keyringDirectory, "debsig.gpg")).then(() => true, () => false);
-  if ((ours === line && keyringPresent && debsigPresent) || (ours === undefined && await aptSourceElsewhere(repository))) return "unchanged";
+  if ((ours === line && keyringPresent) || (ours === undefined && await aptSourceElsewhere(repository))) return "unchanged";
   if (!exe(c, "gpg")) {
     const installed = await installApt(c, "gnupg");
     if (installed.code !== 0) throw new Error(`gnupg is required to verify the ${repository.label} APT key and could not be installed.`);
@@ -148,13 +119,6 @@ export async function ensureAptRepository(c: PackageContext, repository: AptRepo
     await sudo(c, ["install", "-d", "-m", "0755", dirname(repository.keyring), dirname(repository.list)], `Could not create APT directories for ${repository.label}.`);
     await sudo(c, ["install", "-m", "0644", keyring, repository.keyring], `Could not install ${repository.keyring}.`);
     await sudo(c, ["install", "-m", "0644", list, repository.list], `Could not install ${repository.list}.`);
-    if (repository.debsig) {
-      const policy = join(workspace, "policy.pol");
-      await download(c, repository.debsig.policyUrl, policy);
-      await sudo(c, ["install", "-d", "-m", "0755", repository.debsig.policyDirectory, repository.debsig.keyringDirectory], "Could not create debsig directories.");
-      await sudo(c, ["install", "-m", "0644", policy, join(repository.debsig.policyDirectory, "1password.pol")], "Could not install the 1Password debsig policy.");
-      await sudo(c, ["install", "-m", "0644", keyring, join(repository.debsig.keyringDirectory, "debsig.gpg")], "Could not install the 1Password debsig keyring.");
-    }
     // Refresh only this source; the rest of the system's package lists stay as they are.
     await sudo(c, [c.host.packageManagers.apt!, "update", "-o", `Dir::Etc::sourcelist=${repository.list}`, "-o", "Dir::Etc::sourceparts=-", "-o", "APT::Get::List-Cleanup=0"], `apt-get update failed for the ${repository.label} repository.`);
     return done("repository added");
@@ -172,88 +136,6 @@ async function aptRepositoryInstall(c: PackageContext, repository: AptRepository
     }
   } catch (error) { return fail(message(error)); }
   return installApt(c, pkg, Boolean(await aptInstalled(c, pkg)));
-}
-
-// ── 1Password CLI ───────────────────────────────────────────────────────────
-
-async function inspectOnePasswordCli(c: PackageContext): Promise<SoftwareState> {
-  const op = exe(c, "op");
-  if (op && (await c.run(op, ["--version"], { quiet: true })).code === 0) return healthyState(c, "--cask 1password-cli");
-  if (c.host.platform === "darwin") {
-    if (c.host.packageManagers.brew) {
-      if (await brewInstalled(c, "1password-cli")) return { installed: false, healthy: false, route: "brew-reinstall", packageName: "--cask 1password-cli", reason: "The 1password-cli cask is installed but op is unhealthy; reinstalling it." };
-      if (await brewCaskEnabled(c, "1password-cli")) return { installed: false, healthy: false, route: "brew", packageName: "--cask 1password-cli" };
-    }
-    const absent = missing(c, ["curl", "pkgutil", "installer"]);
-    return absent.length ? { installed: false, healthy: false, reason: `The signed 1Password CLI package route requires ${absent.join(", ")}.` } : { installed: false, healthy: false, route: "op-pkg", reason: "Signed universal 1Password CLI package from 1Password" };
-  }
-  if (hasApt(c)) return { installed: false, healthy: false, route: "1password-apt", packageName: "1password-cli", reason: "1Password's signed APT repository" };
-  const absent = missing(c, ["curl", "unzip", "gpg"]);
-  return absent.length ? { installed: false, healthy: false, reason: `The 1Password CLI archive route requires ${absent.join(", ")}.` } : { installed: false, healthy: false, route: "op-zip", reason: `Signed ${debArch(c)} 1Password CLI archive into ~/.local/bin` };
-}
-
-async function latestOpVersion(c: PackageContext): Promise<string> {
-  const version = field(await fetchJson(c, "https://app-updates.agilebits.com/check/1/0/CLI2/en/2.0.0/N"), "version");
-  if (!version || !/^\d+\.\d+\.\d+$/.test(version)) throw new Error("1Password CLI version metadata is invalid.");
-  return version;
-}
-
-async function installOnePasswordCli(c: PackageContext, state: SoftwareState): Promise<CommandResult> {
-  if (state.route === "1password-apt") return aptRepositoryInstall(c, onePasswordRepository, "1password-cli");
-  if (state.route === "op-pkg") return withWorkspace("my-setup-op-", async workspace => {
-    const version = await latestOpVersion(c);
-    const pkg = join(workspace, "op.pkg");
-    await download(c, `https://cache.agilebits.com/dist/1P/op2/pkg/v${version}/op_apple_universal_v${version}.pkg`, pkg);
-    const signature = await c.run(exe(c, "pkgutil")!, ["--check-signature", pkg], { quiet: true });
-    if (signature.code !== 0 || !signature.stdout.includes(onePasswordPkgSigner)) throw new Error(`The 1Password CLI package is not signed by ${onePasswordPkgSigner}.`);
-    await sudo(c, [exe(c, "installer")!, "-pkg", pkg, "-target", "/"], "The 1Password CLI package installer failed.");
-    return done(`1Password CLI ${version} installed`);
-  });
-  if (state.route === "op-zip") return withWorkspace("my-setup-op-", async workspace => {
-    const version = await latestOpVersion(c);
-    const archive = join(workspace, "op.zip");
-    await download(c, `https://cache.agilebits.com/dist/1P/op2/pkg/v${version}/op_linux_${debArch(c)}_v${version}.zip`, archive);
-    const unpacked = join(workspace, "unpacked");
-    if ((await c.run(exe(c, "unzip")!, ["-q", archive, "-d", unpacked], { quiet: true })).code !== 0) throw new Error("Could not unpack the 1Password CLI archive.");
-    await verifySignature(c, workspace, onePasswordKey, join(unpacked, "op.sig"), join(unpacked, "op"));
-    await placeUserExecutable(c, join(unpacked, "op"), "op");
-    return done(`1Password CLI ${version} installed in ~/.local/bin`);
-  });
-  return fail(state.reason ?? "No supported 1Password CLI route.");
-}
-
-// ── 1Password app ───────────────────────────────────────────────────────────
-
-async function inspectOnePasswordApp(c: PackageContext): Promise<SoftwareState> {
-  if (c.host.platform === "darwin") return macCaskApp(c, "1password", onePasswordAppBinary("darwin"), "The 1Password app");
-  if (await isExecutable(onePasswordAppBinary("linux")) && !await access("/opt/1Password/.my-setup-installing").then(() => true, () => false)) return { installed: true, healthy: true };
-  // 1Password's APT repository carries the desktop app for amd64 only; ARM64 uses its signed tarball.
-  if (hasApt(c) && c.host.architecture === "x64") return { installed: false, healthy: false, route: "1password-apt", packageName: "1password", reason: "1Password's signed APT repository" };
-  const absent = missing(c, ["curl", "tar", "gpg"]);
-  return absent.length ? { installed: false, healthy: false, reason: `The 1Password tarball route requires ${absent.join(", ")}.` } : { installed: false, healthy: false, route: "1password-tar", reason: `Signed ${c.host.architecture === "x64" ? "x86_64" : "aarch64"} tarball into /opt/1Password` };
-}
-
-async function installOnePasswordApp(c: PackageContext, state: SoftwareState): Promise<CommandResult> {
-  if (state.route === "1password-apt") return aptRepositoryInstall(c, onePasswordRepository, "1password");
-  if (state.route !== "1password-tar") return fail(state.reason ?? "No supported 1Password app route.");
-  return withWorkspace("my-setup-1password-", async workspace => {
-    const url = `https://downloads.1password.com/linux/tar/stable/${c.host.architecture === "x64" ? "x86_64" : "aarch64"}/1password-latest.tar.gz`;
-    const archive = join(workspace, "1password.tar.gz");
-    await download(c, url, archive);
-    await download(c, `${url}.sig`, `${archive}.sig`);
-    await verifySignature(c, workspace, onePasswordKey, `${archive}.sig`, archive);
-    const unpacked = join(workspace, "unpacked"); await mkdir(unpacked);
-    if ((await c.run(exe(c, "tar")!, ["-xzf", archive, "-C", unpacked], { quiet: true })).code !== 0) throw new Error("Could not unpack the 1Password tarball.");
-    const source = await findDirectoryWith(unpacked, "1password");
-    if (await access("/opt/1Password").then(() => true, () => false)) await sudo(c, ["mv", "/opt/1Password", `/opt/1Password.replaced-${Date.now()}`], "Could not move the incomplete /opt/1Password aside.");
-    await sudo(c, ["mkdir", "-p", "/opt/1Password"], "Could not create /opt/1Password.");
-    await sudo(c, ["touch", "/opt/1Password/.my-setup-installing"], "Could not mark the 1Password installation as incomplete.");
-    await sudo(c, ["cp", "-a", `${source}/.`, "/opt/1Password/"], "Could not copy 1Password into /opt/1Password.");
-    // Upstream's script sets the sandbox/BrowserSupport permissions, the onepassword group, and the desktop entry.
-    await sudo(c, ["/opt/1Password/after-install.sh"], "/opt/1Password/after-install.sh failed.");
-    await sudo(c, ["rm", "/opt/1Password/.my-setup-installing"], "Could not mark the 1Password installation as complete.");
-    return done("1Password installed in /opt/1Password");
-  });
 }
 
 // ── Obsidian ────────────────────────────────────────────────────────────────
@@ -383,8 +265,8 @@ async function installAmphetamine(c: PackageContext, state: SoftwareState): Prom
 
 // ── Dispatch ────────────────────────────────────────────────────────────────
 
-const inspectors: Record<string, (c: PackageContext) => Promise<SoftwareState>> = { "1password": inspectOnePasswordApp, "1password-cli": inspectOnePasswordCli, obsidian: inspectObsidian, gh: inspectGh, "google-chrome": inspectChrome, orbstack: inspectOrbStack, amphetamine: inspectAmphetamine };
-const installers: Record<string, (c: PackageContext, state: SoftwareState) => Promise<CommandResult>> = { "1password": installOnePasswordApp, "1password-cli": installOnePasswordCli, obsidian: installObsidian, gh: installGh, amphetamine: installAmphetamine };
+const inspectors: Record<string, (c: PackageContext) => Promise<SoftwareState>> = { obsidian: inspectObsidian, gh: inspectGh, "google-chrome": inspectChrome, orbstack: inspectOrbStack, amphetamine: inspectAmphetamine };
+const installers: Record<string, (c: PackageContext, state: SoftwareState) => Promise<CommandResult>> = { obsidian: installObsidian, gh: installGh, amphetamine: installAmphetamine };
 
 export function inspectApp(c: PackageContext, id: string): Promise<SoftwareState> {
   const inspect = inspectors[id];

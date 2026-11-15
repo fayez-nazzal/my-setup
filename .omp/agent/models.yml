@@ -1,7 +1,6 @@
 providers:
   typesafe:
-    # Resolved at runtime by op with the scoped OMP service account.
-    apiKey: "!op read \"op://OMP/OMP Jev/password\" --no-newline"
+    apiKey: TYPESAFE_API_KEY
   anthropic:
     # Built-in provider: override only the Haiku 5.5 window. Pricing is unchanged,
     # so prompts above 100k input tokens still bill at the long-context rate.
@@ -9,8 +8,7 @@ providers:
       claude-haiku-5-5:
         contextWindow: 1000000
   anthropic-api:
-    # Resolved at runtime by op with the scoped OMP service account.
-    apiKey: "!op read \"op://OMP/OMP ANTHROPIC/password\" --no-newline"
+    apiKey: ANTHROPIC_API_KEY
     api: anthropic-messages
     baseUrl: https://api.anthropic.com
     models:
@@ -67,8 +65,7 @@ providers:
           cacheRead: 0.10
           cacheWrite: 1.25
   openai-api:
-    # Resolved at runtime by op with the scoped OMP service account.
-    apiKey: "!op read \"op://OMP/OMP OPENAI/password\" --no-newline"
+    apiKey: OPENAI_API_KEY
     api: openai-responses
     baseUrl: https://api.openai.com/v1
     models:
@@ -141,7 +138,7 @@ providers:
           cacheRead: 0.02
           cacheWrite: 0.25
   openrouter:
-    apiKey: "!op read \"op://OMP/OpenRouter API Key - omp/credential\" --no-newline"
+    apiKey: OPENROUTER_API_KEY
     api: openai-completions
     baseUrl: https://openrouter.ai/api/v1
     models:

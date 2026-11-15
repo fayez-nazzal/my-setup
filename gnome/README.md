@@ -11,7 +11,7 @@ Lock as the fullscreen toggle.
 
 - 12 fixed GNOME workspaces, named to match the shared layout:
   `1: Editor`, `2: Browser`, `3: Cursor`, `4: Teams`, `5`–`10`, `G: Terminal`,
-  and `P: 1Password`.
+  and `P`.
 - `Alt+1` through `Alt+9`, `Alt+0`, `Alt+G`, and `Alt+P` workspace switching.
 - `Alt+Shift` versions of those bindings to move the focused window.
 - `Caps Lock` → `F13` through keyd → GNOME fullscreen toggle.

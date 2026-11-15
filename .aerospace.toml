@@ -41,7 +41,6 @@ on-window-detected = [
   { if.app-id = 'dev.zed.Zed', run = ['move-node-to-workspace 1'] },
   { if.app-name-regex-substring = 'Cursor', run = ['move-node-to-workspace 3'] },
   { if.app-id = 'com.microsoft.teams2', run = ['move-node-to-workspace 4'] },
-  { if.app-id = 'com.1password.1password', run = ['move-node-to-workspace P'] },
   { if.app-id = 'md.obsidian', run = ['layout tiling', 'move-node-to-workspace O', 'exec-and-forget $HOME/.config/aerospace/obsidian-fullscreen.sh'] },
   { if.app-name-regex-substring = 'XMind', run = ['move-node-to-workspace X'] },
   { if.app-id = 'com.apple.Safari', run = ['move-node-to-workspace S'] },

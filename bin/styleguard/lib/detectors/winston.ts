@@ -49,7 +49,7 @@ interface WinstonResponse {
 export class WinstonDetector implements Detector {
   // Static so cli.ts can gate detection (skip for short/unsupported input)
   // before resolving the Winston API key. A short run should never touch
-  // 1Password for a secret it will not use.
+  // shared credential store for a secret it will not use.
   static readonly minChars = 300;
   static supportsLanguage(lang: string): boolean {
     return SUPPORTED_LANGUAGES[lang.toLowerCase()] === true;

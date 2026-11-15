@@ -17,37 +17,25 @@ never fails just because a threshold was not reached.
 ## Requirements
 
 - [Bun](https://bun.sh) on `$PATH`.
-- 1Password CLI (`op`) signed in with your personal account, with two items reachable:
-  - `gowinston` (vault `Personal`) — your Winston AI API token.
-  - `OMP OPENAI` (vault `OMP`) — the key `.omp/agent/models.yml` uses for the
-    `openai-api` provider; reused as-is, no new secret created.
-
-Run from a shell where `OP_SERVICE_ACCOUNT_TOKEN` is unset. The OMP service
-account can read only the `OMP` vault, so it cannot read `gowinston`; granting
-it Winston access is not part of this setup, and styleguard does not work with
-the OMP token alone.
+- Explicit `OPENAI_API_KEY` and `WINSTON_API_KEY` environment variables for the
+  providers used by a run. Keep these machine-local and out of the checkout.
 
 No npm dependencies. HTTP calls use Bun's built-in `fetch`.
 
 ## Secret setup
 
-Both secrets are resolved at runtime via the `op` CLI, exactly like
-`.omp/agent/models.yml` does for its provider keys — never hardcoded.
+Both secrets are read lazily from environment variables, never from a shared
+credential store or tracked file:
 
-- **OpenAI** (rewriter): `op read "op://OMP/OMP OPENAI/password" --no-newline`
-- **Winston AI** (detector): `op read "op://Personal/gowinston/password" --no-newline`.
+- **OpenAI** (rewriter): `OPENAI_API_KEY`
+- **Winston AI** (detector): `WINSTON_API_KEY`
 
-  **Live-call status:** this reference could not be exercised end-to-end in
-  the environment this CLI was built in — `op`'s CLI here authenticates
-  through the 1Password desktop app's biometric integration (Touch ID /
-  system auth), which requires an interactive approval that automated
-  session could not provide (`op read ...` hangs waiting for it instead of
-  returning). Run a real smoke test on your own interactive machine, where
-  Touch ID approval is possible, before relying on this in a skill.
+Provide only the credentials needed by the current run. Do not place them in
+shell history or a tracked configuration file.
 
 Secrets are resolved lazily: a run whose input is shorter than Winston's
 300-character minimum (or in an unsupported language) never calls
-`detector.detect()` at all, so it never touches 1Password or the Winston API
+`detector.detect()` at all, so it never reads the Winston key or calls its API
 either — see `lib/loop.ts` / `cli.ts`'s pre-loop gate.
 
 ## Usage
@@ -145,7 +133,7 @@ lib/
   rewriter.ts         OpenAiRewriter — direct OpenAI Responses API call
   style.ts            deterministic rule engine
   style-rules.json    editable banned-phrase list + hard-rule config
-  secrets.ts          op read wrappers for both keys
+  secrets.ts          environment-variable readers for both keys
   logger.ts           human-readable JSON-lines run log writer
   loop.ts             detect -> rewrite -> re-score loop
   config.ts           defaults + --config override merge

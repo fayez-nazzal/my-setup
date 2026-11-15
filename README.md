@@ -37,8 +37,8 @@ Most configs are symlinked, so editing this repo changes your machine. Run
   (`installer/domain/download-pins.ts`). Headless systems skip desktop-only
   choices but retain shell and developer tools.
 
-1Password and its CLI are installed before integration and sign-in dialogs.
-Account dialogs happen before long builds.
+The installer does not manage passwords, API tokens, or account sign-ins.
+Provide credentials explicitly through machine-local environment variables.
 
 ## Everyday behavior
 
@@ -52,27 +52,19 @@ Account dialogs happen before long builds.
   stay independent. Existing windows keep their shells; finish their work and
   close them before adopting this policy. The installer does not close your
   work.
-- **Signing and secrets:** Setup signs into 1Password, then GitHub, preserves
-  or selects GPG/SSH signing, and verifies a temporary signed commit.
-  See [Git](git/README.md) for required 1Password items. Identity and secrets
-  belong in untracked `~/.gitconfig.local` and `~/.config/zsh/local.zsh`.
-  Rotate exposed secrets.
+- **Signing and secrets:** Setup does not provision signing keys, authenticate
+  GitHub CLI, or load credentials into applications. Identity belongs in
+  untracked `~/.gitconfig.local`; provide required credentials explicitly in
+  each machine-local session. Revoke exposed tokens and rotate other secrets.
 - **OMP and writing:** Only selected configuration, extensions, skills, and
   the writer definition are linked—not the whole agent folder with sessions
   and history. The role-backed writer handles bounded writing without tools.
   OpenRouter models are selectable with
   `omp --model openrouter/google/gemini-4-argon` or
-  `omp --model openrouter/deepseek/deepseek-v4.1-flash-1017`; their API key is
-  read at runtime from `op://OMP/OpenRouter API Key - omp/credential` through
-  the scoped OMP service account
-  ([Shell](zsh/README.md#omp-credentials)). Existing model-role assignments
-  are unchanged. `~/.omp/agent/models.yml` links to `.omp/agent/models.yml`
-  here.
-  If all vault keys fail or Keychain no longer prompts, run
-  `zsh ~/my-setup/bin/omp-setup-credentials` in your terminal on macOS.
-  It creates and verifies a scoped replacement token, backs up the old
-  Keychain value, and resets trusted applications. OMP refuses to launch
-  with a token that cannot authenticate.
+  `omp --model openrouter/deepseek/deepseek-v4.1-flash-1017`; its API key is
+  read from `OPENROUTER_API_KEY` when provided by the current session.
+  Existing model-role assignments are unchanged. `~/.omp/agent/models.yml`
+  links to `.omp/agent/models.yml` here.
 - **RTK:** The `rtk` software choice installs the pinned, digest-checked
   release into `~/.bun/bin/rtk`. Its OMP extension lives in the linked
   extensions directory and rewrites plain bash commands to compact output.
@@ -88,17 +80,10 @@ Account dialogs happen before long builds.
   service. The custom palettes improve default text, status and syntax
   contrast; application-supplied colors can still override them.
 - **Excalidraw+ MCP:** OMP uses `.omp/agent/mcp.json`, linked on this machine
-  to `~/.omp/agent/mcp.json`. Claude Code has a user-scoped `excalidraw`
-  server in `~/.claude.json`. Both connect to
-  `https://api.excalidraw.com/api/v1/mcp` and read
-  `op://OMP/OMP EXCALIDRAW/password` at runtime via the scoped OMP service
-  account.
-  OMP uses a `!command` Authorization header; Claude uses `headersHelper`
-  with `op` and `jq`. Neither configuration stores the key. On a fresh
-  machine, link the MCP file and register Claude's server separately;
-  the installer does not configure Claude Code. Restart clients after changes.
-  Verify Claude with `claude mcp get excalidraw`. Its helper uses your personal
-  `op` sign-in, not the scoped OMP token; this repo does not change it.
+  to `~/.omp/agent/mcp.json`. Provide `EXCALIDRAW_API_KEY` explicitly to its
+  session. Claude Code's optional helper uses the separate
+  `MY_SETUP_CLAUDE_EXCALIDRAW_KEY` variable. Neither configuration stores a
+  key. The installer does not configure Claude Code.
 
 ## Details
 
