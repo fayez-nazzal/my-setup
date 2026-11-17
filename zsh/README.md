@@ -18,7 +18,7 @@ The installer does not change your login shell. On Linux run
 
 1. `.zshenv` runs in every shell.
 2. `.zprofile` runs in login shells and loads `profile.d/*.zsh`: Homebrew,
-   PATH, Corretto 21 `JAVA_HOME`, and OrbStack when present.
+   PATH, and Corretto 21 `JAVA_HOME` when present.
 3. `.zshrc` runs in interactive shells and loads `rc.d/*.zsh` in name order:
    GPG terminal setup, prompt, tool setup, history, key bindings, aliases,
    completion, and zoxide.

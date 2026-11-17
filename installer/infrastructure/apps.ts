@@ -8,7 +8,7 @@ import type { Platform } from "./host";
 import { downloadVerified } from "./downloads";
 
 /** Apps with their own inspect/install routes per OS and CPU (the rest of the software list lives in packages.ts). */
-export const appIds: ReadonlySet<string> = new Set(["obsidian", "gh", "google-chrome", "orbstack", "amphetamine"]);
+export const appIds: ReadonlySet<string> = new Set(["obsidian", "gh", "google-chrome", "amphetamine"]);
 /** Routes that elevate with sudo; the CLI authenticates once before running them (mas asks sudo itself otherwise). */
 export const appSudoRoutes: ReadonlySet<string> = new Set(["obsidian-deb", "obsidian-tar", "gh-apt", "amphetamine-mas"]);
 const obsidianAppBinary = (platform: Platform) => platform === "darwin" ? "/Applications/Obsidian.app/Contents/MacOS/Obsidian" : "/opt/Obsidian/obsidian";
@@ -229,7 +229,7 @@ async function installGh(c: PackageContext, state: SoftwareState): Promise<Comma
   });
 }
 
-// ── macOS-only apps: Google Chrome, OrbStack (Homebrew casks), Amphetamine (App Store through Homebrew's mas) ──
+// ── macOS-only apps: Google Chrome (Homebrew cask), Amphetamine (App Store through Homebrew's mas) ──
 
 export const amphetamineApp = "/Applications/Amphetamine.app";
 /** Amphetamine's App Store id; it has no Homebrew cask. */
@@ -237,9 +237,6 @@ const amphetamineStoreId = "937984704";
 
 async function inspectChrome(c: PackageContext): Promise<SoftwareState> {
   return macCaskApp(c, "google-chrome", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "Google Chrome");
-}
-async function inspectOrbStack(c: PackageContext): Promise<SoftwareState> {
-  return macCaskApp(c, "orbstack", "/Applications/OrbStack.app/Contents/MacOS/OrbStack", "OrbStack");
 }
 
 async function inspectAmphetamine(c: PackageContext): Promise<SoftwareState> {
@@ -265,7 +262,7 @@ async function installAmphetamine(c: PackageContext, state: SoftwareState): Prom
 
 // ── Dispatch ────────────────────────────────────────────────────────────────
 
-const inspectors: Record<string, (c: PackageContext) => Promise<SoftwareState>> = { obsidian: inspectObsidian, gh: inspectGh, "google-chrome": inspectChrome, orbstack: inspectOrbStack, amphetamine: inspectAmphetamine };
+const inspectors: Record<string, (c: PackageContext) => Promise<SoftwareState>> = { obsidian: inspectObsidian, gh: inspectGh, "google-chrome": inspectChrome, amphetamine: inspectAmphetamine };
 const installers: Record<string, (c: PackageContext, state: SoftwareState) => Promise<CommandResult>> = { obsidian: installObsidian, gh: installGh, amphetamine: installAmphetamine };
 
 export function inspectApp(c: PackageContext, id: string): Promise<SoftwareState> {

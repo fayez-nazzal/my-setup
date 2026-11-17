@@ -36,7 +36,7 @@ const refreshHost = async () => {
 };
 const recipeContext = { host: recipeHost, home, repoRoot: root, run: commands.run.bind(commands), ensureLink: fileLinks.ensureLink.bind(fileLinks), backupUserFile: fileLinks.backup.bind(fileLinks), refreshHost };
 const availability = new Map<ComponentId, ComponentAvailability>();
-const softwareIds: ComponentId[] = ["zsh","git","tmux","starship","zoxide","fzf","bat","eza","fd","ripgrep","thefuck","killport","rtk","volta","node-lts","aws-cli","corretto21","alacritty","nerd-font","gh","obsidian","aerospace","google-chrome","orbstack","amphetamine","linux-desktop","keyd"];
+const softwareIds: ComponentId[] = ["zsh","git","tmux","starship","zoxide","fzf","bat","eza","fd","ripgrep","thefuck","killport","rtk","volta","node-lts","aws-cli","corretto21","alacritty","nerd-font","gh","obsidian","aerospace","google-chrome","amphetamine","linux-desktop","keyd"];
 const softwareStates = new Map<ComponentId, SoftwareState>();
 const inspect = (id: ComponentId) => runtimeIds.has(id) ? inspectRuntime(recipeContext, id) : appIds.has(id) ? inspectApp(recipeContext, id) : inspectPackage(recipeContext, id);
 const sudoRoutes = new Set([...packageSudoRoutes, ...appSudoRoutes, ...runtimeSudoRoutes]);

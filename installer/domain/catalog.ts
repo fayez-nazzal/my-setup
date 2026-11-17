@@ -45,7 +45,6 @@ export const catalog: readonly ComponentDefinition[] = [
   { id: "obsidian", label: "Obsidian", description: "Install Obsidian (Homebrew cask on macOS; digest-checked .deb on Linux amd64, release tarball into /opt/Obsidian on arm64). Desktop only.", group: "Software", platforms: both, requires: [] },
   { id: "aerospace", label: "AeroSpace", description: "Build AeroSpace from main with full Xcode (rebuilt when main moves); otherwise install the Homebrew cask.", group: "OS software/state", platforms: mac, requires: [] },
   { id: "google-chrome", label: "Google Chrome", description: "Install Google Chrome with the Homebrew cask.", group: "OS software/state", platforms: mac, requires: [] },
-  { id: "orbstack", label: "OrbStack", description: "Install OrbStack (Docker and Linux machines) with the Homebrew cask.", group: "OS software/state", platforms: mac, requires: [] },
   { id: "amphetamine", label: "Amphetamine", description: "Install Amphetamine from the App Store with Homebrew's mas; sign in to the App Store first.", group: "OS software/state", platforms: mac, requires: [] },
   { id: "linux-desktop", label: "Linux desktop bundle", description: "Install this setup's APT audio/network/rofi bundle; not a generic Linux desktop stack.", group: "OS software/state", platforms: linux, requires: [] },
   { id: "keyd", label: "keyd", description: "Install keyd through a supported APT package or the pinned upstream v2.6.0 source build.", group: "OS software/state", platforms: linux, requires: [] },
